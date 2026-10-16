@@ -18,9 +18,9 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: false
-      - name: Install runtime dependency
-        run: gem install prism --no-document
-      - name: Run unit and integration-stub tests
+      - name: Install test dependencies
+        run: gem install prism rspec --no-document
+      - name: Run tests (including real RSpec integration)
         run: ruby -Ilib -e 'Dir["test/*_test.rb"].each { |f| require_relative f }'
       - name: Build gem
         run: gem build sabun.gemspec
