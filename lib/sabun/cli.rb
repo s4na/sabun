@@ -62,7 +62,7 @@ module Sabun
           if suite['kind'] == 'rspec'
             loader = File.expand_path('boot', __dir__)
             existing = ENV['RUBYOPT'].to_s
-            rubyopt = "-r#{loader} #{existing}".strip
+            rubyopt = "#{existing} -r#{loader}".strip
             Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output, 'RUBYOPT' => rubyopt })
           else
             Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output })
