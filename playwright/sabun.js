@@ -18,7 +18,11 @@ const test = base.extend({
     const token = process.env.SABUN_E2E_TOKEN;
     const template = process.env.SABUN_E2E_URL_TEMPLATE;
     const output = process.env.SABUN_RECORD_FILE;
-    if (!token || !template || !output) throw new Error('sabun E2E recording requires TOKEN, URL_TEMPLATE and RECORD_FILE');
+    if (!output) {
+      await use();
+      return;
+    }
+    if (!token || !template) throw new Error('sabun E2E recording requires TOKEN and URL_TEMPLATE');
     const url = template.replaceAll('{parallelIndex}', String(testInfo.parallelIndex));
     const id = `${process.pid}-${testInfo.workerIndex}-${testInfo.retry}-${crypto.randomUUID()}`;
     const rel = path.relative(process.env.SABUN_ROOT || process.cwd(), testInfo.file).replaceAll('\\', '/');
