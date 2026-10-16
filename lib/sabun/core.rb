@@ -25,11 +25,11 @@ module Sabun
     def git(*args, root: self.root)
       output, error, status = Open3.capture3('git', '-C', root, *args)
       raise Error, "git #{args.first}: #{error.strip}" unless status.success?
-      output.strip
+      output
     end
 
     def sha(ref = 'HEAD', root: self.root)
-      git('rev-parse', '--verify', "#{ref}^{commit}", root: root)
+      git('rev-parse', '--verify', "#{ref}^{commit}", root: root).strip
     end
 
     def fingerprint(root: self.root)
