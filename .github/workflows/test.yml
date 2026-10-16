@@ -22,5 +22,7 @@ jobs:
         run: gem install prism rspec --no-document
       - name: Run tests (including real RSpec integration)
         run: ruby -Ilib -e 'Dir["test/*_test.rb"].each { |f| require_relative f }'
+      - name: Test Playwright bridge (without browser)
+        run: node --test test/playwright_bridge.test.js
       - name: Build gem
         run: gem build sabun.gemspec
