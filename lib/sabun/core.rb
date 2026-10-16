@@ -1,0 +1,88 @@
+# frozen_string_literal: true
+require 'json'
+require 'digest'
+require 'fileutils'
+require 'open3'
+require 'pathname'
+require 'shellwords'
+require 'set'
+
+module Sabun
+  class Error < StandardError; end
+  module Core
+    module_function
+
+    def root
+      File.expand_path(ENV.fetch('SABUN_ROOT', Dir.pwd))
+    end
+
+    def relative(path, base = root)
+      absolute = File.expand_path(path, base)
+      prefix = "#{File.expand_path(base)}/"
+      absolute.start_with?(prefix) ? absolute.delete_prefix(prefix).tr('\\', '/') : nil
+    end
+
+    def git(*args, root: self.root)
+      output, error, status = Open3.capture3('git', '-C', root, *args)
+      raise Error, "git #{args.first}: #{error.strip}" unless status.success?
+      output.strip
+    end
+
+    def sha(ref = 'HEAD', root: self.root)
+      git('rev-parse', '--verify', "#{ref}^{commit}", root: root)
+    end
+
+    def fingerprint(root: self.root)
+      keys = %w[RUBYOPT RAILS_ENV RACK_ENV BUNDLE_GEMFILE SABUN_ENV_KEY]
+      env = keys.to_h { |key| [key, ENV[key]] }
+      files = %w[Gemfile.lock .ruby-version package-lock.json yarn.lock pnpm-lock.yaml]
+      digests = files.to_h { |path| [path, File.file?(File.join(root, path)) ? Digest::SHA256.file(File.join(root, path)).hexdigest : nil] }
+      Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests]))
+    end
+
+    def read_json(path)
+      JSON.parse(File.read(path))
+    rescue JSON::ParserError, Errno::ENOENT => e
+      raise Error, "invalid JSON #{path}: #{e.message}"
+    end
+
+    def write_json(path, data)
+      FileUtils.mkdir_p(File.dirname(path))
+      temporary = "#{path}.#{Process.pid}.tmp"
+      File.write(temporary, JSON.pretty_generate(data) + "\n")
+      File.rename(temporary, path)
+    ensure
+      File.delete(temporary) if temporary && File.exist?(temporary)
+    end
+
+    def load_config(path = 'sabun.json', root: self.root)
+      config = read_json(File.expand_path(path, root))
+      raise Error, 'config requires suites array' unless config['suites'].is_a?(Array) && !config['suites'].empty?
+      ids = config['suites'].map { |s| s.fetch('id') }
+      raise Error, 'duplicate suite IDs' unless ids.uniq == ids
+      config['suites'].each do |suite|
+        raise Error, 'invalid suite' unless %w[rspec playwright].include?(suite['kind']) && suite['glob'].is_a?(String)
+        raise Error, 'playwright suites require projects array' if suite['kind'] == 'playwright' && !(suite['projects'].is_a?(Array) && !suite['projects'].empty? && suite['projects'].all? { |p| p.is_a?(String) && !p.empty? })
+        raise Error, 'missing command array' unless suite['command'].is_a?(Array) && suite['command'].all? { |x| x.is_a?(String) }
+      end
+      config
+    end
+
+    def inventory(config, root: self.root)
+      config.fetch('suites').to_h do |suite|
+        files = Dir.glob(File.join(root, suite.fetch('glob'))).select { |f| File.file?(f) }
+        units = files.map { |f| relative(f, root) }.compact.sort
+        units = suite.fetch('projects').flat_map { |project| units.map { |path| "#{path}::#{project}" } } if suite['kind'] == 'playwright'
+        [suite.fetch('id'), units]
+      end
+    end
+
+    def command!(argv, env: {}, root: self.root)
+      raise Error, 'empty command' if argv.empty?
+      system(env, *argv, chdir: root)
+      status = $?.exitstatus || 1
+      raise Error, "command failed (#{status}): #{argv.first}" unless status.zero?
+      true
+    end
+  end
+end
