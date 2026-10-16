@@ -16,11 +16,13 @@ module Sabun
       def call(env)
         return control(env) if env['PATH_INFO'] == '/__sabun__/control'
         @mutex.synchronize { @active += 1 }
-        status, headers, body = @app.call(env)
-        [status, headers, WrappedBody.new(body) { @mutex.synchronize { @active -= 1 } }]
-      rescue Exception
-        @mutex.synchronize { @active -= 1 }
-        raise
+        begin
+          status, headers, body = @app.call(env)
+          [status, headers, WrappedBody.new(body) { @mutex.synchronize { @active -= 1 } }]
+        rescue Exception
+          @mutex.synchronize { @active -= 1 }
+          raise
+        end
       end
 
       private
