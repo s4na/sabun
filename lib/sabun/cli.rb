@@ -51,7 +51,7 @@ module Sabun
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
       root = Core.root
       sha = Core.sha
-      raise Error, 'record requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').empty?
+      raise Error, 'record requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').strip.empty?
       inventory = Core.inventory(config)
       units = {}
       Dir.mktmpdir('sabun-record-') do |directory|
@@ -100,7 +100,7 @@ module Sabun
     def plan(argv)
       args = options(argv, [['config', :config], ['baseline', :baseline], ['head', :head], ['out', :out]])
       raise Error, 'plan requires --baseline and --out' unless args[:baseline] && args[:out]
-      raise Error, 'plan requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').empty?
+      raise Error, 'plan requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').strip.empty?
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
       head = args.fetch(:head, 'HEAD')
       raise Error, 'head must match checked-out HEAD' unless Core.sha(head) == Core.sha
@@ -124,7 +124,7 @@ module Sabun
     def execute(argv)
       args = options(argv, [['config', :config], ['plan', :plan]])
       raise Error, 'run requires --plan' unless args[:plan]
-      raise Error, 'run requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').empty?
+      raise Error, 'run requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').strip.empty?
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
       plan = Core.read_json(args[:plan])
       raise Error, 'stale or invalid plan' unless plan['schema_version'] == 1 && plan['head'] == Core.sha && plan['fingerprint'] == Core.fingerprint
