@@ -143,7 +143,7 @@ module Sabun
         else
           selected.group_by { |unit| unit.split('::', 2).last }.each do |project, units|
             files = units.map { |unit| unit.split('::', 2).first }
-            Core.command!(command + ['--project', project] + files)
+            Core.command!(command + ["--project=#{project}", '--'] + files)
           end
         end
       end
