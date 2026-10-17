@@ -60,7 +60,9 @@ jobs:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: true
       - name: Compare selected and full runs against real Rails request specs
-        run: bundle exec ruby -Ilib test/integration/rails_quality_test.rb
+        run: |
+          bundle exec ruby -Ilib test/integration/rails_quality_test.rb
+          bundle exec ruby -Ilib test/integration/layer_quality_test.rb
       - uses: actions/upload-artifact@v4
         if: always()
         with:
