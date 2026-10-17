@@ -2,6 +2,9 @@
 require_relative '../config/environment'
 require 'rspec/rails'
 
+# Rails/RSpecのバージョン差に依存せず、fixtureのジョブを同期実行する。
+ActiveJob::Base.queue_adapter = :inline
+
 RSpec.configure do |config|
   config.infer_spec_type_from_file_location!
   config.use_transactional_fixtures = false
