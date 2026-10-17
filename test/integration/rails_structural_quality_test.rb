@@ -16,11 +16,11 @@ class RailsStructuralQualityTest < Minitest::Test
           to: "validates :status, inclusion: { in: ['cancelled'] }", broad: true },
         { name: 'default-scope', path: 'app/models/order.rb',
           from: 'class Order < ActiveRecord::Base',
-          to: "class Order < ActiveRecord::Base\\n  default_scope { where(status: 'cancelled') }",
+          to: "class Order < ActiveRecord::Base\n  default_scope { where(status: 'cancelled') }",
           broad: true },
         { name: 'model-callback', path: 'app/models/order.rb',
           from: 'class Order < ActiveRecord::Base',
-          to: "class Order < ActiveRecord::Base\\n  before_save { raise 'blocked by callback' }",
+          to: "class Order < ActiveRecord::Base\n  before_save { raise 'blocked by callback' }",
           broad: true },
         { name: 'schema-column', path: 'config/environment.rb',
           from: 'table.string :status, null: false',
@@ -57,7 +57,7 @@ class RailsStructuralQualityTest < Minitest::Test
       controller = 'app/controllers/checkouts_controller.rb'
       project.write(controller, project.read(controller)
         .sub('class CheckoutsController < ActionController::Base',
-             "class CheckoutsController < ActionController::Base\\n  include CheckoutLabel")
+             "class CheckoutsController < ActionController::Base\n  include CheckoutLabel")
         .sub('@price = Price.amount', '@price = checkout_price'))
       project.commit('use Rails controller concern')
       baseline = assert_recorded(project)
