@@ -142,6 +142,8 @@ module Sabun
       plan = Core.read_json(args[:plan])
       raise Error, 'stale or invalid plan' unless plan['schema_version'] == 1 && plan['head'] == Core.sha && plan['fingerprint'] == Core.fingerprint(config: config)
       inventory = Core.inventory(config)
+      expected_head = plan.fetch('head')
+      expected_fingerprint = plan.fetch('fingerprint')
       raise Error, 'plan suites differ from config' unless plan.fetch('suites').keys == config.fetch('suites').map { |s| s['id'] }
       config.fetch('suites').each do |suite|
         id = suite.fetch('id')
@@ -161,6 +163,11 @@ module Sabun
               'SABUN_EXPECTED_IDENTITY' => JSON.generate('commit' => plan['head'], 'fingerprint' => plan['fingerprint'])
             })
           end
+        end
+        Core.assert_clean!
+        raise Error, 'checkout changed during selected execution' unless Core.sha == expected_head
+        unless Core.fingerprint(config: Core.load_config(args.fetch(:config, 'sabun.json'))) == expected_fingerprint
+          raise Error, 'environment or configuration changed during selected execution'
         end
       end
       0
