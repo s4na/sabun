@@ -1,6 +1,7 @@
 require_relative '../rails_helper'
 
 RSpec.describe CheckoutsController, type: :controller do
+  render_views
   it '価格を描画する' do
     get :show
     expect(response).to have_http_status(:ok)
