@@ -6,7 +6,7 @@ require 'active_job/railtie'
 
 module SabunFixture
   class Application < Rails::Application
-    config.load_defaults 7.2
+    config.load_defaults(Rails::VERSION::MAJOR >= 8 ? 8.0 : (Rails::VERSION::MINOR >= 2 ? 7.2 : 7.1))
     config.root = File.expand_path('..', __dir__)
     config.eager_load = false
     config.enable_reloading = false
