@@ -172,6 +172,13 @@ class FixtureProject
 end
 
 module SelectionQualityAssertions
+  def failed_example_ids(examples)
+    # Playwrightの操作不能はtimedOutでも返る。通常の失敗と同じく見逃しを比較する。
+    unexpected = examples.reject { |example| %w[passed failed timedOut].include?(example['status']) }
+    assert_empty unexpected, 'skipped, interrupted or missing results must not count as completed verification'
+    examples.reject { |example| example['status'] == 'passed' }.map { |example| example['id'] }.sort
+  end
+
   def assert_recorded(project)
     recorded = project.record
     assert_equal 0, recorded.status, project.diagnostic(recorded)
@@ -222,8 +229,8 @@ module SelectionQualityAssertions
       actual_full = project.examples(full)
       assert_equal selected_units.sort, actual_selected.map { |e| e['unit'] }.uniq.sort
       assert_equal original_examples.map { |e| e['id'] }.sort, actual_full.map { |e| e['id'] }.sort
-      full_failures = actual_full.select { |e| e['status'] == 'failed' }.map { |e| e['id'] }.sort
-      selected_failures = actual_selected.select { |e| e['status'] == 'failed' }.map { |e| e['id'] }.sort
+      full_failures = failed_example_ids(actual_full)
+      selected_failures = failed_example_ids(actual_selected)
       refute_empty full_failures, "#{name}: full run did not detect the intended defect"
       assert_equal full_failures, selected_failures, "#{name}: failing examples were lost"
       if name == 'price'
@@ -263,9 +270,9 @@ module SelectionQualityAssertions
     selected = project.run_selected('environment-selected', env: env)
     assert_equal 1, full.status, project.diagnostic(full)
     assert_equal 2, selected.status, project.diagnostic(selected)
-    failures = project.examples(full).select { |e| e['status'] == 'failed' }.map { |e| e['id'] }.sort
+    failures = failed_example_ids(project.examples(full))
     refute_empty failures
-    assert_equal failures, project.examples(selected).select { |e| e['status'] == 'failed' }.map { |e| e['id'] }.sort
+    assert_equal failures, failed_example_ids(project.examples(selected))
   end
 
   def core_mutations
