@@ -8,7 +8,6 @@ class LayerQualityTest < Minitest::Test
     project = FixtureProject.new('rspec', 'rails-layer-quality')
     begin
       model = 'app/models/order.rb'
-      project.write(model, project.read(model).sub("  validates :status", "  def paid?\n    status == 'paid'\n  end\n\n  validates :status"))
       project.write('sabun.json', JSON.pretty_generate('suites' => [
         project.suite.merge('glob' => 'spec/**/*_spec.rb',
                             'command' => project.suite.fetch('command')[0...-2] + ['--default-path', 'spec'])
