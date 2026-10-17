@@ -13,6 +13,18 @@ module Sabun
       @started = true
     end
 
+    def capture_worker_identity!
+      Core.assert_clean!
+      config = Core.load_config(ENV.fetch('SABUN_CONFIG_PATH', 'sabun.json'))
+      @worker_identity = { 'commit' => Core.sha, 'fingerprint' => Core.fingerprint(config: config) }
+    rescue Error
+      @worker_identity = nil
+    end
+
+    def worker_identity
+      @worker_identity
+    end
+
     def snapshot
       Coverage.peek_result.transform_values do |v|
         { lines: v.fetch(:lines, []).map { |count| count || 0 }, methods: v.fetch(:methods, {}) }

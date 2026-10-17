@@ -15,7 +15,8 @@ class FixtureProject
   Result = Struct.new(:status, :stdout, :stderr, :report, :label, keyword_init: true)
   attr_reader :root, :kind, :suite, :evidence
 
-  def initialize(kind, name)
+  def initialize(kind, name, source: SOURCE)
+    @source = source
     @kind = kind
     @root = Dir.mktmpdir("sabun-#{kind}-")
     @evidence = File.join(SOURCE, 'tmp', 'quality', name)
@@ -24,11 +25,13 @@ class FixtureProject
     FileUtils.mkdir_p(File.join(@root, 'tmp'))
     File.symlink(File.join(SOURCE, 'node_modules'), File.join(@root, 'node_modules')) if kind == 'playwright'
     @env = {
-      'BUNDLE_GEMFILE' => File.join(SOURCE, 'Gemfile'),
-      'RUBYLIB' => [File.join(SOURCE, 'lib'), ENV['RUBYLIB']].compact.join(File::PATH_SEPARATOR),
-      'SABUN_ROOT' => @root, 'SABUN_SOURCE' => SOURCE, 'SABUN_RUBY' => RbConfig.ruby,
+      'BUNDLE_GEMFILE' => File.join(@source, 'Gemfile'),
+      'RUBYLIB' => [File.join(@source, 'lib'), ENV['RUBYLIB']].compact.join(File::PATH_SEPARATOR),
+      'SABUN_ROOT' => @root, 'SABUN_SOURCE' => @source, 'SABUN_RUBY' => RbConfig.ruby,
       'SABUN_ENV_KEY' => 'quality-fixture-v1', 'RAILS_ENV' => 'test', 'RACK_ENV' => 'test',
       'SABUN_RECORD_FILE' => nil, 'SABUN_FIXTURE_RETRY' => nil,
+      'SABUN_FIXTURE_SERVER_ROOT' => nil, 'SABUN_FIXTURE_FLAG' => nil,
+      'SABUN_EXPECTED_IDENTITY' => nil, 'SABUN_CONFIG_PATH' => nil,
       'SABUN_E2E_TOKEN' => SecureRandom.hex(24), 'SABUN_E2E_URL_TEMPLATE' => nil
     }
     @suite = if kind == 'rspec'
@@ -39,7 +42,7 @@ class FixtureProject
       { 'id' => kind, 'kind' => kind, 'glob' => 'e2e/**/*.spec.js', 'projects' => ['chromium'],
         'command' => [File.join(SOURCE, 'node_modules/.bin/playwright'), 'test'] }
     end
-    write('sabun.json', JSON.pretty_generate('suites' => [@suite]))
+    write('sabun.json', JSON.pretty_generate('suites' => [@suite], 'environment_variables' => ['SABUN_FIXTURE_FLAG']))
     git('init', '-q')
     git('config', 'user.name', 'Sabun Fixture')
     git('config', 'user.email', 'fixture@example.invalid')
@@ -80,24 +83,24 @@ class FixtureProject
     cli(label, 'record', '--all', '--out', 'tmp/baseline.json', env: env)
   end
 
-  def plan(label)
-    result = cli(label, 'plan', '--baseline', 'tmp/baseline.json', '--out', 'tmp/plan.json')
+  def plan(label, env: {})
+    result = cli(label, 'plan', '--baseline', 'tmp/baseline.json', '--out', 'tmp/plan.json', env: env)
     raise "plan failed: #{diagnostic(result)}" unless result.status == 0
     data = JSON.parse(read('tmp/plan.json'))
     File.write(File.join(@evidence, "#{label}.json"), JSON.pretty_generate(data))
     data
   end
 
-  def run_selected(label)
-    cli(label, 'run', '--plan', 'tmp/plan.json')
+  def run_selected(label, env: {})
+    cli(label, 'run', '--plan', 'tmp/plan.json', env: env)
   end
 
-  def run_all(label)
-    command(label, *@suite.fetch('command'))
+  def run_all(label, env: {})
+    command(label, *@suite.fetch('command'), env: env)
   end
 
   def cli(label, *args, env: {})
-    command(label, RbConfig.ruby, File.join(SOURCE, 'bin/sabun'), *args, env: env)
+    command(label, RbConfig.ruby, File.join(@source, 'bin/sabun'), *args, env: env)
   end
 
   def command(label, *argv, env: {})
@@ -249,6 +252,20 @@ module SelectionQualityAssertions
       project.write(path, original)
       project.commit('restore unused method')
     end
+  end
+
+  def assert_environment_change(project, original_examples)
+    env = { 'SABUN_FIXTURE_FLAG' => 'broken' }
+    plan = project.plan('environment-plan', env: env)
+    selection = plan.fetch('suites').fetch(project.kind)
+    assert_equal original_examples.map { |e| e['unit'] }.uniq.sort, selection['selected'].sort
+    full = project.run_all('environment-full', env: env)
+    selected = project.run_selected('environment-selected', env: env)
+    assert_equal 1, full.status, project.diagnostic(full)
+    assert_equal 2, selected.status, project.diagnostic(selected)
+    failures = project.examples(full).select { |e| e['status'] == 'failed' }.map { |e| e['id'] }.sort
+    refute_empty failures
+    assert_equal failures, project.examples(selected).select { |e| e['status'] == 'failed' }.map { |e| e['id'] }.sort
   end
 
   def core_mutations

@@ -79,7 +79,7 @@ module Sabun
       reasons = []
       if map['schema_version'] != SCHEMA || !map['complete']
         reasons << 'invalid_or_incomplete_baseline'
-      elsif map['fingerprint'] != Core.fingerprint(root: @root)
+      elsif map['fingerprint'] != Core.fingerprint(root: @root, config: config)
         reasons << 'environment_mismatch'
       elsif map['suite_ids'] != suites.map { |s| s['id'] }
         reasons << 'suite_inventory_changed'
@@ -118,7 +118,7 @@ module Sabun
         end
         [id, { 'kind' => suite.fetch('kind'), 'selected' => selected, 'skipped' => units - selected, 'reasons' => explanations }]
       end
-      { 'schema_version' => SCHEMA, 'head' => current_head, 'baseline' => map['commit'], 'fingerprint' => Core.fingerprint(root: @root), 'changes' => changes, 'suites' => decisions }
+      { 'schema_version' => SCHEMA, 'head' => current_head, 'baseline' => map['commit'], 'fingerprint' => Core.fingerprint(root: @root, config: config), 'changes' => changes, 'suites' => decisions }
     end
   end
 end

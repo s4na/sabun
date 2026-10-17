@@ -41,7 +41,7 @@ class QualityContractTest < Minitest::Test
   def save_map(overrides = {})
     Sabun::Core.write_json(@baseline, {
       'schema_version' => 1, 'commit' => @base, 'complete' => true,
-      'fingerprint' => Sabun::Core.fingerprint, 'suite_ids' => ['spec'],
+      'fingerprint' => Sabun::Core.fingerprint(config: @config), 'suite_ids' => ['spec'],
       'units' => { 'spec' => {
         'spec/service_spec.rb' => { 'complete' => true, 'dependencies' => ['app/service.rb'] },
         'spec/other_spec.rb' => { 'complete' => true, 'dependencies' => [] }

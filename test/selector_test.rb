@@ -43,7 +43,7 @@ class SelectorTest < Minitest::Test
 
   def save_baseline(**overrides)
     Sabun::Core.write_json(@baseline, {
-      'schema_version' => 1, 'commit' => @base, 'fingerprint' => Sabun::Core.fingerprint,
+      'schema_version' => 1, 'commit' => @base, 'fingerprint' => Sabun::Core.fingerprint(config: @config),
       'suite_ids' => ['spec'], 'complete' => true, 'units' => { 'spec' => @units }
     }.merge(overrides))
   end

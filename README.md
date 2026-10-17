@@ -6,7 +6,7 @@ Ruby/Rails と Playwright E2E の差分テスト選択gemです。**変更に影
 
 ## 対応する機能
 
-- RSpec（request/system specを含む）: Ruby Coverageの行・メソッド実行情報をspecファイル単位で記録
+- RSpec: Ruby Coverageの行・メソッド実行情報をspecファイル単位で記録。request specを実Railsで検証
 - Playwright: テストファイル×project単位で、専用Rails workerの実行情報を記録
 - Gitのbaseline commitとHEADの変更差分を取得し、Prismで既存メソッド本体だけの変更を判定
 - メソッド本体のみの変更は実行依存で選択。それ以外の構造・設定・資産・新規ファイル変更は全件へフォールバック
@@ -26,6 +26,7 @@ gem 'sabun', git: 'https://github.com/s4na/sabun', require: false
 
 ```json
 {
+  "environment_variables": [],
   "suites": [
     {
       "id": "rspec",
@@ -49,7 +50,13 @@ bundle exec sabun run --plan tmp/sabun/plan.json
 
 初期導入時は `plan` と `explain` で選択内容を記録し、**CIは従来どおり全件実行**してください。テスト漏れの検証後にのみ `run` に切り替えます。
 
-`tmp/sabun` はgitignoreしてください。記録・計画・実行では追跡ファイルがクリーンである必要があります。baselineは信頼できる全件実行から作り、作成コミットと環境fingerprintを保存します。選択実行からbaselineを増分更新することはありません。
+`tmp/sabun` はgitignoreしてください。記録・計画・実行では、未追跡ファイルも含めて作業ツリーがクリーンである必要があります。baselineは成功した全件実行から作り、作成コミットと環境fingerprintを保存します。実行中にHEAD・追跡ファイル・設定が変わった場合は保存を拒否し、既存のbaselineを残します。選択実行からbaselineを増分更新することはありません。
+
+### 実行条件の登録
+
+Feature Flag、localeなどの環境変数で結果が変わる場合は、`environment_variables` に変数名を登録してください。例: `"environment_variables": ["NEW_CHECKOUT", "APP_LOCALE"]`。設定全体と宣言した値をfingerprintに含め、変更時は過去の依存関係でテストを省略しません。値そのものはマップに保存しません。
+
+外部のFlagサービスやテストデータなど、環境変数だけで表せない条件は`SABUN_ENV_KEY`にその条件のバージョンを設定し、変更に合わせて更新してください。宣言していない外部入力や、Git管理外の実行コードの変更を自動検出する仕組みではありません。
 
 ## Playwright E2E
 
@@ -74,6 +81,7 @@ module.exports = {
 
 ```json
 {
+  "environment_variables": [],
   "suites": [
     {
       "id": "e2e",
@@ -92,6 +100,8 @@ Railsアプリ側では、テスト専用のサーバーを **Playwright worker�
 require 'sabun/e2e'
 config.middleware.insert_before 0, Sabun::E2E::Middleware
 ```
+
+CLIとRails workerは、同じコミット・設定・宣言済み実行条件のGit checkoutを使ってください。workerは起動時のコミットとfingerprintを保持し、`record` / `run`が渡す識別情報との不一致を拒否します。Git情報がないサーバーや、古いworkerを使った計測は受け入れません。独自の設定パスを使う場合はworker起動前にも`SABUN_CONFIG_PATH`を設定してください。
 
 Playwright側とRails側に共通の `SABUN_E2E_TOKEN` を設定し、Playwright側には次も設定します。
 

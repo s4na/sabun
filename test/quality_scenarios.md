@@ -20,12 +20,17 @@
 | `before_action`を追加する | 全件へ拡大し、認可で止まる画面を双方で検出 |
 | ERBのタイトルを壊す | 全件へ拡大し、実際の描画失敗を双方で検出 |
 | JSのDOM更新・CSSの表示を壊す | 実ブラウザーで回帰を検出 |
+| 宣言した環境変数だけを変更する | Git差分がなくても全件へ広げ、request / browser双方で回帰を検出 |
 | 変更なし・未使用メソッドの無害な変更 | 差分実行を省略し、全件実行も成功する |
 | Playwright 2 worker | Railsプロセス・URL・SQLite DBをworker単位に分離 |
 | bridgeを使わないテストを追加 | 全テスト自体は成功しても、不完全なbaselineへの置換を拒否 |
 | 初回失敗 → retry成功 | 実際のworker再起動を確認し、部分的な観測の昇格を拒否 |
+| 別コミットのRails workerを接続する | 計測を拒否し、既存のbaselineを残す |
+| 記録中に追跡ファイルを書き換える／HEADを進める | 実RSpecが成功してもbaselineの保存を拒否 |
+| 未追跡のRubyソースがある | record / plan / runを開始せず、既存baselineを残す |
+| gemを空白を含むパスに置く | 実RSpecとRailsで正常に記録できる |
 
-reporterの引数契約とE2E起動依存には、修正前の不具合を再現する小さな回帰テストもあります。
+reporterの引数契約、E2E起動依存、worker識別情報の固定、環境fingerprintには小さな回帰テストもあります。
 
 ## 実行
 

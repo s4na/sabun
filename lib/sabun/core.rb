@@ -32,12 +32,23 @@ module Sabun
       git('rev-parse', '--verify', "#{ref}^{commit}", root: root).strip
     end
 
-    def fingerprint(root: self.root)
-      keys = %w[RUBYOPT RAILS_ENV RACK_ENV BUNDLE_GEMFILE SABUN_ENV_KEY]
+    def fingerprint(root: self.root, config: nil)
+      keys = (%w[RUBYOPT RAILS_ENV RACK_ENV BUNDLE_GEMFILE SABUN_ENV_KEY] +
+              (config || {}).fetch('environment_variables', [])).uniq.sort
       env = keys.to_h { |key| [key, ENV[key]] }
+      # 計測用loaderだけは実行条件の差にしない。その他のRubyオプションは保持する。
+      env['RUBYOPT'] = env['RUBYOPT'].to_s.split.reject do |option|
+        %w[-rsabun/boot -rsabun/e2e/boot].include?(option)
+      end.join(' ')
       files = %w[Gemfile.lock .ruby-version package-lock.json yarn.lock pnpm-lock.yaml]
-      digests = files.to_h { |path| [path, File.file?(File.join(root, path)) ? Digest::SHA256.file(File.join(root, path)).hexdigest : nil] }
-      Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests]))
+      files << "#{File.expand_path(ENV['BUNDLE_GEMFILE'], root)}.lock" if ENV['BUNDLE_GEMFILE']
+      digests = files.to_h { |path| [path, File.file?(File.expand_path(path, root)) ? Digest::SHA256.file(File.expand_path(path, root)).hexdigest : nil] }
+      Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests, config]))
+    end
+
+    def assert_clean!
+      return if git('status', '--porcelain', '--untracked-files=all').strip.empty?
+      raise Error, 'working tree must be clean, including untracked files'
     end
 
     def read_json(path)
@@ -60,6 +71,10 @@ module Sabun
       raise Error, 'config requires suites array' unless config['suites'].is_a?(Array) && !config['suites'].empty?
       ids = config['suites'].map { |s| s.fetch('id') }
       raise Error, 'duplicate suite IDs' unless ids.uniq == ids
+      variables = config.fetch('environment_variables', [])
+      unless variables.is_a?(Array) && variables.all? { |name| name.is_a?(String) && name.match?(/\A[A-Za-z_][A-Za-z0-9_]*\z/) }
+        raise Error, 'environment_variables must contain environment variable names'
+      end
       config['suites'].each do |suite|
         raise Error, 'invalid suite' unless %w[rspec playwright].include?(suite['kind']) && suite['glob'].is_a?(String)
         raise Error, 'playwright suites require projects array' if suite['kind'] == 'playwright' && !(suite['projects'].is_a?(Array) && !suite['projects'].empty? && suite['projects'].all? { |p| p.is_a?(String) && !p.empty? })

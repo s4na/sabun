@@ -13,6 +13,7 @@ class BrowserQualityTest < Minitest::Test
       assert_operator workers.map { |w| w['url'] }.uniq.size, :>=, 2
       baseline_digest = Digest::SHA256.hexdigest(project.read('tmp/baseline.json'))
       assert_no_change_is_skipped(project)
+      assert_environment_change(project, examples)
       mutations = core_mutations + [
         { name: 'javascript', path: 'public/app.js', from: 'details ready', to: 'broken', broad: true },
         { name: 'css', path: 'public/app.css', from: 'display: inline', to: 'display: none', broad: true }
@@ -57,6 +58,24 @@ class BrowserQualityTest < Minitest::Test
       assert_equal %w[failed passed], retried['attempts'].map { |a| a['status'] }
       assert_equal 2, retried['attempts'].map { |a| a['workerIndex'] }.uniq.size
     ensure
+      project.close
+    end
+  end
+
+  def test_a_worker_from_another_commit_cannot_supply_the_baseline
+    project = FixtureProject.new('playwright', 'browser-stale-worker')
+    stale = FixtureProject.new('playwright', 'browser-stale-source')
+    begin
+      assert_recorded(project)
+      baseline = project.read('tmp/baseline.json')
+      stale.git('commit', '--allow-empty', '-qm', 'different worker revision')
+      refute_equal project.git('rev-parse', 'HEAD'), stale.git('rev-parse', 'HEAD')
+      result = project.record('reject-stale-worker', env: { 'SABUN_FIXTURE_SERVER_ROOT' => stale.root })
+      assert_equal 2, result.status, project.diagnostic(result)
+      assert_includes JSON.generate(result.report), 'worker identity mismatch'
+      assert_equal baseline, project.read('tmp/baseline.json')
+    ensure
+      stale.close
       project.close
     end
   end

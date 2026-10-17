@@ -1,5 +1,5 @@
 class BootLabel
   def self.text
-    'ready'
+    ENV.fetch('SABUN_FIXTURE_FLAG', 'ready')
   end
 end

@@ -27,15 +27,18 @@ async function stop(child) {
 const test = base.extend({
   fixtureServer: [async ({}, use, workerInfo) => {
     const root = process.cwd();
+    const serverRoot = process.env.SABUN_FIXTURE_SERVER_ROOT || root;
     fs.mkdirSync(path.join(root, 'tmp'), { recursive: true });
     const port = await unusedPort();
     const url = `http://127.0.0.1:${port}`;
     const log = path.join(root, 'tmp', `rails-worker-${workerInfo.workerIndex}.log`);
     const child = spawn(process.env.SABUN_RUBY, ['server.rb'], {
-      cwd: root,
+      cwd: serverRoot,
       env: {
         ...process.env,
         PORT: String(port),
+        SABUN_ROOT: serverRoot,
+        SABUN_CONFIG_PATH: path.join(serverRoot, 'sabun.json'),
         SABUN_FIXTURE_DATABASE: path.join(root, 'tmp', `worker-${workerInfo.workerIndex}.sqlite3`),
         SABUN_E2E_JOBS_SYNC: '1',
       },

@@ -40,7 +40,7 @@ module Sabun
     def doctor(argv)
       args = options(argv, [['config', :config]])
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
-      puts JSON.pretty_generate({ ruby: RUBY_VERSION, git: Core.sha, suites: Core.inventory(config), fingerprint: Core.fingerprint })
+      puts JSON.pretty_generate({ ruby: RUBY_VERSION, git: Core.sha, suites: Core.inventory(config), fingerprint: Core.fingerprint(config: config) })
       0
     end
 
@@ -51,7 +51,10 @@ module Sabun
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
       root = Core.root
       sha = Core.sha
-      raise Error, 'record requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').strip.empty?
+      Core.assert_clean!
+      config_path = File.expand_path(args.fetch(:config, 'sabun.json'), root)
+      fingerprint = Core.fingerprint(root: root, config: config)
+      identity = { 'commit' => sha, 'fingerprint' => fingerprint }
       inventory = Core.inventory(config)
       units = {}
       Dir.mktmpdir('sabun-record-') do |directory|
@@ -60,14 +63,16 @@ module Sabun
           output = File.join(directory, "#{id}.json")
           cmd = suite.fetch('command')
           if suite['kind'] == 'rspec'
-            loader = File.expand_path('boot', __dir__)
+            lib = File.expand_path('..', __dir__)
             existing = ENV['RUBYOPT'].to_s
-            rubyopt = "#{existing} -r#{loader}".strip
-            Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output, 'RUBYOPT' => rubyopt })
+            rubyopt = "#{existing} -rsabun/boot".strip
+            rubylib = [lib, ENV['RUBYLIB']].compact.join(File::PATH_SEPARATOR)
+            Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output, 'RUBYOPT' => rubyopt, 'RUBYLIB' => rubylib })
           else
-            Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output })
+            Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output,
+                                      'SABUN_CONFIG_PATH' => config_path, 'SABUN_EXPECTED_IDENTITY' => JSON.generate(identity) })
           end
-          result = suite['kind'] == 'playwright' ? aggregate_e2e(output) : Core.read_json(output)
+          result = suite['kind'] == 'playwright' ? aggregate_e2e(output, identity: identity) : Core.read_json(output)
           raise Error, "incomplete recording for #{id}" unless result['complete'] == true
           observed = result.fetch('units')
           missing = inventory.fetch(id) - observed.keys
@@ -75,12 +80,17 @@ module Sabun
           units[id] = observed
         end
       end
-      Core.write_json(args[:out], { 'schema_version' => 1, 'commit' => sha, 'fingerprint' => Core.fingerprint(root: root), 'suite_ids' => config.fetch('suites').map { |s| s['id'] }, 'complete' => true, 'units' => units })
+      Core.assert_clean!
+      raise Error, 'checkout changed during recording' unless Core.sha == sha
+      unless Core.fingerprint(root: root, config: Core.load_config(config_path)) == fingerprint
+        raise Error, 'environment or configuration changed during recording'
+      end
+      Core.write_json(args[:out], { 'schema_version' => 1, 'commit' => sha, 'fingerprint' => fingerprint, 'suite_ids' => config.fetch('suites').map { |s| s['id'] }, 'complete' => true, 'units' => units })
       puts "baseline written to #{args[:out]}"
       0
     end
 
-    def aggregate_e2e(output)
+    def aggregate_e2e(output, identity:)
       manifest = Core.read_json("#{output}.manifest.json")
       entries = Dir.glob("#{output}.d/*.json")
       expected = manifest.fetch('tests')
@@ -88,19 +98,20 @@ module Sabun
       units = {}
       entries.each do |path|
         data = Core.read_json(path)
+        raise Error, 'worker identity mismatch in recording' unless data['identity'] == identity
         unit = data.fetch('unit')
         seen << data.fetch('test_id')
         entry = (units[unit] ||= { 'complete' => true, 'dependencies' => [] })
         entry['complete'] &&= data['complete'] == true
         entry['dependencies'] |= data.fetch('dependencies')
       end
-      { 'complete' => manifest['complete'] == true && !expected.empty? && (expected - seen.to_a).empty?, 'units' => units }
+      { 'complete' => manifest['complete'] == true && !expected.empty? && (expected - seen.to_a).empty? && units.values.all? { |unit| unit['complete'] }, 'units' => units }
     end
 
     def plan(argv)
       args = options(argv, [['config', :config], ['baseline', :baseline], ['head', :head], ['out', :out]])
       raise Error, 'plan requires --baseline and --out' unless args[:baseline] && args[:out]
-      raise Error, 'plan requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').strip.empty?
+      Core.assert_clean!
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
       head = args.fetch(:head, 'HEAD')
       raise Error, 'head must match checked-out HEAD' unless Core.sha(head) == Core.sha
@@ -124,10 +135,10 @@ module Sabun
     def execute(argv)
       args = options(argv, [['config', :config], ['plan', :plan]])
       raise Error, 'run requires --plan' unless args[:plan]
-      raise Error, 'run requires a clean tracked working tree' unless Core.git('status', '--porcelain', '--untracked-files=no').strip.empty?
+      Core.assert_clean!
       config = Core.load_config(args.fetch(:config, 'sabun.json'))
       plan = Core.read_json(args[:plan])
-      raise Error, 'stale or invalid plan' unless plan['schema_version'] == 1 && plan['head'] == Core.sha && plan['fingerprint'] == Core.fingerprint
+      raise Error, 'stale or invalid plan' unless plan['schema_version'] == 1 && plan['head'] == Core.sha && plan['fingerprint'] == Core.fingerprint(config: config)
       inventory = Core.inventory(config)
       raise Error, 'plan suites differ from config' unless plan.fetch('suites').keys == config.fetch('suites').map { |s| s['id'] }
       config.fetch('suites').each do |suite|
@@ -143,7 +154,10 @@ module Sabun
         else
           selected.group_by { |unit| unit.split('::', 2).last }.each do |project, units|
             files = units.map { |unit| unit.split('::', 2).first }
-            Core.command!(command + ["--project=#{project}", '--'] + files)
+            Core.command!(command + ["--project=#{project}", '--'] + files, env: {
+              'SABUN_CONFIG_PATH' => File.expand_path(args.fetch(:config, 'sabun.json'), Core.root),
+              'SABUN_EXPECTED_IDENTITY' => JSON.generate('commit' => plan['head'], 'fingerprint' => plan['fingerprint'])
+            })
           end
         end
       end
