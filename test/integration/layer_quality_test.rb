@@ -8,10 +8,10 @@ class LayerQualityTest < Minitest::Test
     project = FixtureProject.new('rspec', 'rails-layer-quality')
     begin
       model = 'app/models/order.rb'
-      project.write('sabun.json', JSON.pretty_generate('suites' => [
-        project.suite.merge('glob' => 'spec/**/*_spec.rb',
-                            'command' => project.suite.fetch('command')[0...-2] + ['--default-path', 'spec'])
-      ], 'environment_variables' => ['SABUN_FIXTURE_FLAG']))
+      project.suite['glob'] = 'spec/**/*_spec.rb'
+      project.suite['command'] = project.suite.fetch('command')[0...-2] + ['--default-path', 'spec']
+      project.write('sabun.json', JSON.pretty_generate('suites' => [project.suite],
+                                                       'environment_variables' => ['SABUN_FIXTURE_FLAG']))
       project.commit('enable model and controller specs')
       original = assert_recorded(project)
       assert_equal 6, original.size
