@@ -33,4 +33,29 @@ class RailsStructuralQualityTest < Minitest::Test
       project.close
     end
   end
+  def test_controller_concern_method_change_selects_only_affected_request
+    project = FixtureProject.new('rspec', 'rails-concern')
+    begin
+      project.write('app/controllers/concerns/checkout_label.rb', <<~RUBY)
+        module CheckoutLabel
+          def checkout_price
+            Price.amount
+          end
+        end
+      RUBY
+      controller = 'app/controllers/checkouts_controller.rb'
+      project.write(controller, project.read(controller)
+        .sub('class CheckoutsController < ActionController::Base',
+             "class CheckoutsController < ActionController::Base\\n  include CheckoutLabel")
+        .sub('@price = Price.amount', '@price = checkout_price'))
+      project.commit('use Rails controller concern')
+      baseline = assert_recorded(project)
+      assert_mutation(project, baseline, name: 'concern-method',
+                      path: 'app/controllers/concerns/checkout_label.rb',
+                      from: 'Price.amount', to: '900')
+    ensure
+      project.close
+    end
+  end
+
 end
