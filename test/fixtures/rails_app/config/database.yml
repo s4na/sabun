@@ -1,0 +1,4 @@
+test:
+  adapter: sqlite3
+  database: <%= ENV.fetch('SABUN_FIXTURE_DATABASE', ':memory:').inspect %>
+  pool: 5

@@ -40,11 +40,14 @@ module Sabun
           case action
           when 'start'
             return respond(409, error: 'overlapping test') if @session
-            @session = { id: id, snapshot: Recorder.snapshot }
+            snapshot = Recorder.snapshot
+            # 起動時に計算・保存された値は、リクエスト中に再実行されなくても依存する。
+            @common ||= Recorder.changed({}, snapshot, methods_only: true)
+            @session = { id: id, snapshot: snapshot }
             respond(200, ok: true)
           when 'finish'
             return respond(409, error: 'test ID mismatch') unless @session && @session[:id] == id
-            dependencies = Recorder.changed(@session[:snapshot], Recorder.snapshot).filter_map { |path| Core.relative(path) }
+            dependencies = (@common | Recorder.changed(@session[:snapshot], Recorder.snapshot)).filter_map { |path| Core.relative(path) }
             @session = nil
             respond(200, dependencies: dependencies)
           else

@@ -1,0 +1,6 @@
+{
+  "name": "sabun-integration-tests",
+  "private": true,
+  "scripts": { "test": "node --test test/*.test.js" },
+  "devDependencies": { "@playwright/test": "1.56.1" }
+}

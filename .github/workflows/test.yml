@@ -5,6 +5,9 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -18,11 +21,63 @@ jobs:
         with:
           ruby-version: ${{ matrix.ruby }}
           bundler-cache: false
-      - name: Install test dependencies
-        run: gem install prism rspec --no-document
-      - name: Run tests (including real RSpec integration)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install unit test dependencies
+        run: |
+          gem install prism rspec --no-document
+          gem install minitest -v '~> 5.20' --no-document
+      - name: Run Ruby unit tests and real RSpec integration
         run: ruby -Ilib -e 'Dir["test/*_test.rb"].each { |f| require_relative f }'
-      - name: Test Playwright bridge (without browser)
-        run: node --test test/playwright_bridge.test.js
+      - name: Run JavaScript contract tests
+        run: node --test test/*.test.js
       - name: Build gem
         run: gem build sabun.gemspec
+
+  rails-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ['3.2', '3.3', '3.4']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+      - name: Compare selected and full runs against real Rails request specs
+        run: bundle exec ruby -Ilib test/integration/rails_quality_test.rb
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rails-quality-${{ matrix.ruby }}
+          path: tmp/quality
+          retention-days: 7
+
+  browser-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install real Playwright and Chromium
+        run: |
+          npm install --ignore-scripts --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Compare selected and full runs with Chromium, Rails and SQLite
+        run: bundle exec ruby -Ilib test/integration/browser_quality_test.rb
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-quality
+          path: tmp/quality
+          retention-days: 7

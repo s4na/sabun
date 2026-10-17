@@ -2,7 +2,7 @@
 
 Ruby/Rails と Playwright E2E の差分テスト選択gemです。**変更に影響しない根拠があるテストだけを省略し、判断できない変更では全件実行します。**
 
-**状態: v0.1.0（初期実装）。** Rubyコアと計測プロトコルは実装済みですが、実際のRailsアプリとPlaywrightブラウザーを使った結合検証は未実施です。本番CIの全件実行を置き換える前にshadow modeで検証してください。完全な検出率を保証するものではありません。
+**状態: v0.1.0（初期実装）。** 実RailsとChromiumを使うテスト用fixtureを同梱し、全件実行との回帰検出の一致と、無関係なテストの省略を品質ゲートで検証します。あらゆるアプリの検出率を保証するものではないため、導入先でも最初はshadow modeで確認してください。
 
 ## 対応する機能
 
@@ -112,15 +112,22 @@ reporterは全テストのIDを記録し、bridgeが計測したテストと照�
 - Rubyのメソッド本体変更以外は原則全件実行します。callback・route・template・Factory・JS/CSSなどの構造・資産依存の細粒度選択は未実装です。
 - E2EのJS/CSSソース→ビルド資産マッピングは未実装で、資産変更時は全件実行します。
 - テスト間の共有状態・外部サービス・Feature Flag・キャッシュは完全に自動追跡できません。環境条件とデータ初期化の再現性が必要です。
-- 実Rails/Playwright結合試験は未実施です。選択器が見逃した失敗を検出するため、定期的な全件監査を継続してください。
+- 品質ゲートはRails request specとChromiumのPlaywrightを対象にします。Capybara system spec、非同期ジョブ、他ブラウザーまで検証済みとは扱いません。導入先でも全件監査を継続してください。
 
-## 開発
+## 開発・品質ゲート
 
 ```bash
-ruby -Ilib -e 'Dir["test/*_test.rb"].each { |f| require_relative f }'
+bundle install
+npm install --ignore-scripts --no-audit --no-fund
+npx playwright install --with-deps chromium
+
+bundle exec rake test:rails test:browser
+node --test test/*.test.js
 gem build sabun.gemspec
 ```
 
-Ruby 3.3.8で、Minitest 12件・28アサーション、gem build、ローカルgem installを検証しました。RSpecフックはテスト用スタブでの動作確認です。実際のRSpec/Rails/Playwright環境での結合検証は未実施です。
+`test/fixtures/rails_app` を一時Gitリポジトリにコピーし、実ランナーでbaselineを生成します。価格・起動時の値・inlineジョブ・callback・ERB・JS/CSSを意図的に壊し、全件実行で失敗するexampleが差分実行でも同じように失敗することを検証します。無関係なテストを実際に省略することもassertするため、常時全件実行に戻すだけでは通りません。
+
+CIにはRuby 3.2 / 3.3 / 3.4のrequest品質ゲートと、Ruby 3.3・Node 22・Chromiumのbrowser品質ゲートがあります。実行ログ・plan・JSON結果は`tmp/quality`とCI artifactに保存します。詳細と検証範囲は[品質ゲート](test/quality_scenarios.md)を参照してください。
 
 設計と今後の細粒度化方針: [docs/design.md](docs/design.md)。
