@@ -76,7 +76,7 @@ class SelectorTest < Minitest::Test
   def test_changed_spec_is_selected
     write('spec/b_spec.rb', '# changed')
     git('add', 'spec/b_spec.rb'); git('commit', '-qm', 'spec change')
-    assert_equal 2, plan['suites']['spec']['selected'].size
+    assert_equal ['spec/b_spec.rb'], plan['suites']['spec']['selected']
   end
 
   def test_mismatched_fingerprint_runs_all
@@ -99,4 +99,24 @@ class SelectorTest < Minitest::Test
     git('add', 'app/model.rb'); git('commit', '-qm', 'dynamic method')
     assert_equal 'structural', plan['changes'].first['scope']
   end
+  def test_changed_playwright_spec_selects_only_its_projects
+    write('e2e/checkout.spec.js', 'test checkout')
+    write('e2e/shipping.spec.js', 'test shipping')
+    git('add', 'e2e')
+    git('commit', '-qm', 'add browser specs')
+    @base = Sabun::Core.sha
+    @config = { 'suites' => [{ 'id' => 'browser', 'kind' => 'playwright',
+      'glob' => 'e2e/*.spec.js', 'projects' => %w[chromium firefox], 'command' => ['npx', 'playwright', 'test'] }] }
+    browser_units = %w[checkout shipping].product(%w[chromium firefox]).to_h do |name, project|
+      ["e2e/#{name}.spec.js::#{project}", { 'complete' => true, 'dependencies' => [] }]
+    end
+    save_baseline('suite_ids' => ['browser'], 'units' => { 'browser' => browser_units })
+    write('e2e/checkout.spec.js', 'test changed checkout')
+    git('add', 'e2e/checkout.spec.js')
+    git('commit', '-qm', 'change checkout spec')
+    selection = plan.fetch('suites').fetch('browser')
+    assert_equal %w[chromium firefox].map { |p| "e2e/checkout.spec.js::#{p}" }.sort, selection['selected'].sort
+    assert_equal %w[chromium firefox].map { |p| "e2e/shipping.spec.js::#{p}" }.sort, selection['skipped'].sort
+  end
+
 end
