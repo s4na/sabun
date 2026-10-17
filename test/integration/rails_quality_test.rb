@@ -91,7 +91,14 @@ class RailsQualityTest < Minitest::Test
       end
       project = FixtureProject.new('rspec', 'rails-loader-spaces', source: source)
       begin
-        result = project.record('record-with-spaces', env: { 'BUNDLE_PATH' => Bundler.bundle_path.to_s })
+        # BUNDLE_PATHはRubyバージョン別ディレクトリを含まない基底パスを指定する。
+        bundle_path = Bundler.settings.path
+        bundle_env = if bundle_path.use_system_gems?
+          { 'BUNDLE_PATH' => nil, 'BUNDLE_PATH__SYSTEM' => 'true' }
+        else
+          { 'BUNDLE_PATH' => File.expand_path(bundle_path.base_path, Bundler.root), 'BUNDLE_PATH__SYSTEM' => nil }
+        end
+        result = project.record('record-with-spaces', env: bundle_env)
         assert_equal 0, result.status, project.diagnostic(result)
         assert_equal 3, project.examples(result).size
         assert project.examples(result).all? { |e| e['status'] == 'passed' }
