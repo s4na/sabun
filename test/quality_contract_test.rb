@@ -108,7 +108,7 @@ class QualityContractTest < Minitest::Test
     write('Gemfile.lock', "GEM\n  specs:\n    example (1.0.0)\n")
     git('add', 'Gemfile.lock')
     git('commit', '-qm', 'lock baseline')
-    save_map('commit' => Sabun::Core.sha, 'fingerprint' => Sabun::Core.fingerprint)
+    save_map('commit' => Sabun::Core.sha, 'fingerprint' => Sabun::Core.fingerprint(config: @config))
     commit('Gemfile.lock', "GEM\n  specs:\n    example (2.0.0)\n")
     assert_equal 2, selected.size
   end
@@ -122,7 +122,7 @@ class QualityContractTest < Minitest::Test
     write('Gemfile.lock', "GEM\n  specs:\n    example (1.0.0)\n")
     git('add', 'Gemfile.lock')
     git('commit', '-qm', 'lock baseline')
-    save_map('commit' => Sabun::Core.sha, 'fingerprint' => Sabun::Core.fingerprint)
+    save_map('commit' => Sabun::Core.sha, 'fingerprint' => Sabun::Core.fingerprint(config: @config))
     write('Gemfile.lock', "GEM\n  specs:\n    example (2.0.0)\n")
     assert_equal 2, selected.size
   end
