@@ -28,4 +28,34 @@ class RSpecIntegrationTest < Minitest::Test
       assert_includes result.fetch('units').fetch('spec/calculator_spec.rb').fetch('dependencies'), 'app/calculator.rb'
     end
   end
+  def test_after_context_dependency_is_attributed_to_test_file
+    skip 'rspec-core is not installed' if Gem::Specification.find_all_by_name('rspec-core').empty?
+    Dir.mktmpdir('sabun-rspec-teardown-') do |root|
+      FileUtils.mkdir_p(File.join(root, 'app'))
+      FileUtils.mkdir_p(File.join(root, 'spec'))
+      File.write(File.join(root, 'app', 'cleanup.rb'), <<~RUBY)
+        class Cleanup
+          def self.perform
+            :cleaned
+          end
+        end
+      RUBY
+      File.write(File.join(root, 'spec', 'cleanup_spec.rb'), <<~RUBY)
+        require_relative '../app/cleanup'
+        RSpec.describe Cleanup do
+          after(:context) { Cleanup.perform }
+          it('runs an independent assertion') { expect(1).to eq(1) }
+        end
+      RUBY
+      loader = File.expand_path('../lib/sabun/boot', __dir__)
+      output = File.join(root, 'record.json')
+      env = { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output, 'RUBYOPT' => "-r#{loader}" }
+      stdout, stderr, status = Open3.capture3(env, RbConfig.ruby, '-S', 'rspec', 'spec/cleanup_spec.rb', chdir: root)
+      assert status.success?, "#{stdout}\n#{stderr}"
+      result = JSON.parse(File.read(output))
+      assert result['complete']
+      assert_includes result.fetch('units').fetch('spec/cleanup_spec.rb').fetch('dependencies'), 'app/cleanup.rb'
+    end
+  end
+
 end
