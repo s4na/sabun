@@ -11,7 +11,10 @@ RSpec.configure do |config|
   config.before(:each) do |example|
     ActiveJob::Base.queue_adapter = :inline
     # unrelated specをOrderモデルの依存にしない。実際にDBを使うspecだけ初期化する。
-    Order.delete_all if example.metadata[:type] == :model || example.metadata[:file_path].end_with?('/requests/order_spec.rb')
+    if example.metadata[:type] == :model || example.metadata[:file_path].end_with?('/requests/order_spec.rb')
+      Order.delete_all
+      ReceiptJob.queue_adapter = :inline if example.metadata[:file_path].end_with?('/requests/order_spec.rb')
+    end
     Rails.cache.clear
   end
 end
