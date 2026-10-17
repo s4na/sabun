@@ -103,4 +103,27 @@ class QualityContractTest < Minitest::Test
     save_map('complete' => false)
     assert_equal 2, selected.size
   end
+
+  def test_lockfile_dependency_upgrade_runs_all
+    write('Gemfile.lock', "GEM\n  specs:\n    example (1.0.0)\n")
+    git('add', 'Gemfile.lock')
+    git('commit', '-qm', 'lock baseline')
+    save_map('commit' => Sabun::Core.sha, 'fingerprint' => Sabun::Core.fingerprint)
+    commit('Gemfile.lock', "GEM\n  specs:\n    example (2.0.0)\n")
+    assert_equal 2, selected.size
+  end
+
+  def test_gemfile_dependency_change_runs_all
+    commit('Gemfile', "gem 'example', '2.0'\n")
+    assert_equal 2, selected.size
+  end
+
+  def test_uncommitted_lockfile_change_invalidates_baseline
+    write('Gemfile.lock', "GEM\n  specs:\n    example (1.0.0)\n")
+    git('add', 'Gemfile.lock')
+    git('commit', '-qm', 'lock baseline')
+    save_map('commit' => Sabun::Core.sha, 'fingerprint' => Sabun::Core.fingerprint)
+    write('Gemfile.lock', "GEM\n  specs:\n    example (2.0.0)\n")
+    assert_equal 2, selected.size
+  end
 end
