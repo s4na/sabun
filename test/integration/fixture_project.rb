@@ -37,7 +37,7 @@ class FixtureProject
     @suite = if kind == 'rspec'
       { 'id' => kind, 'kind' => kind, 'glob' => 'spec/requests/**/*_spec.rb',
         'command' => [RbConfig.ruby, Gem.bin_path('bundler', 'bundle'), 'exec', 'rspec',
-                      '--format', 'json', '--out', 'tmp/rspec-result.json', 'spec/requests'] }
+                      '--format', 'json', '--out', 'tmp/rspec-result.json', '--default-path', 'spec/requests'] }
     else
       { 'id' => kind, 'kind' => kind, 'glob' => 'e2e/**/*.spec.js', 'projects' => ['chromium'],
         'command' => [File.join(SOURCE, 'node_modules/.bin/playwright'), 'test'] }
