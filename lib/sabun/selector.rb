@@ -106,7 +106,7 @@ module Sabun
           why << 'unobserved_or_incomplete' unless entry.is_a?(Hash) && entry['complete'] == true && entry['dependencies'].is_a?(Array)
           why << 'test_changed' if changes.any? { |change| change['path'] == unit.split('::', 2).first }
           changes.each do |change|
-            next if change['path'] == unit
+            next if change['path'] == unit.split('::', 2).first
             if change['scope'] == 'ruby_body'
               why << "ruby_dependency:#{change['path']}" if entry && entry.fetch('dependencies', []).include?(change['path'])
             else

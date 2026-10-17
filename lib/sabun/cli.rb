@@ -65,7 +65,7 @@ module Sabun
           if suite['kind'] == 'rspec'
             lib = File.expand_path('..', __dir__)
             existing = ENV['RUBYOPT'].to_s
-            rubyopt = "#{existing} -rsabun/boot".strip
+            rubyopt = "-rsabun/boot #{existing}".strip
             rubylib = [lib, ENV['RUBYLIB']].compact.join(File::PATH_SEPARATOR)
             Core.command!(cmd, env: { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output, 'RUBYOPT' => rubyopt, 'RUBYLIB' => rubylib })
           else
@@ -75,8 +75,10 @@ module Sabun
           result = suite['kind'] == 'playwright' ? aggregate_e2e(output, identity: identity) : Core.read_json(output)
           raise Error, "incomplete recording for #{id}" unless result['complete'] == true
           observed = result.fetch('units')
-          missing = inventory.fetch(id) - observed.keys
-          raise Error, "unrecorded units in #{id}: #{missing.join(', ')}" unless missing.empty?
+          expected = inventory.fetch(id)
+          unless observed.keys.sort == expected.sort
+            raise Error, "recorded units differ from configured inventory for #{id}"
+          end
           units[id] = observed
         end
       end

@@ -43,6 +43,11 @@ module Sabun
           end
           case action
           when 'start'
+            if data.key?('identity')
+              Recorder.capture_worker_identity!
+              @worker_identity = Recorder.worker_identity
+              return respond(409, error: 'worker identity mismatch') if @worker_identity.nil? || data['identity'] != @worker_identity
+            end
             return respond(409, error: 'overlapping test') if @session
             snapshot = Recorder.snapshot
             # 起動時に計算・保存された値は、リクエスト中に再実行されなくても依存する。
