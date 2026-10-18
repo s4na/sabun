@@ -79,6 +79,18 @@ class SelectorTest < Minitest::Test
     assert_equal ['spec/b_spec.rb'], plan['suites']['spec']['selected']
   end
 
+  def test_spec_with_new_suite_wide_rspec_behavior_selects_the_suite
+    write('spec/a_spec.rb', <<~RUBY)
+      RSpec.configure do |config|
+        config.before(:suite) { ENV['SUITE_SETUP'] = '1' }
+      end
+    RUBY
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'add suite-wide setup')
+
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
+  end
+
   def test_changed_test_support_file_selects_recorded_consumers
     @units['spec/b_spec.rb']['dependencies'] = ['spec/a_spec.rb']
     save_baseline

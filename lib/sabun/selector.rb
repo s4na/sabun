@@ -65,6 +65,7 @@ module Sabun
 
   class Selector
     SCHEMA = 1
+    SUITE_WIDE_TEST_BEHAVIOR = /\bRSpec\.(?:configure|shared_context|shared_examples)\b|^\s*(?:class|module)\s+|\b(?:prepend|include)\s+/m
 
     def initialize(root: Core.root)
       @root = root
@@ -115,7 +116,11 @@ module Sabun
             if test_paths.include?(change['path'])
               # A configured test may also be required as executable support
               # code by another unit; preserve that recorded dependency.
-              why << "test_dependency:#{change['path']}" if valid_entry && entry['dependencies'].include?(change['path'])
+              if suite_wide_test_behavior?(change)
+                why << "suite_wide_test_behavior:#{change['path']}"
+              elsif valid_entry && entry['dependencies'].include?(change['path'])
+                why << "test_dependency:#{change['path']}"
+              end
               next
             end
             if change['scope'] == 'ruby_body'
@@ -133,6 +138,16 @@ module Sabun
     end
 
     private
+
+    def suite_wide_test_behavior?(change)
+      return false unless change['path'].end_with?('.rb')
+
+      before = Core.git('show', "#{@baseline}:#{change['path']}", root: @root)
+      after = Core.git('show', "#{@head}:#{change['path']}", root: @root)
+      (before + "\n" + after).match?(SUITE_WIDE_TEST_BEHAVIOR)
+    rescue Error
+      true
+    end
 
     def valid_observation?(entry)
       entry.is_a?(Hash) && entry['complete'] == true && entry['dependencies'].is_a?(Array) &&
