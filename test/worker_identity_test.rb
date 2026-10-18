@@ -102,8 +102,10 @@ class WorkerIdentityTest < Minitest::Test
         end
         raise 'start rejected' unless control.call('start')[0] == 200
         raise 'finish rejected' unless control.call('finish')[0] == 200
-        require_relative 'cleanup'
-        Cleanup.run # Simulates a Rails request made by Playwright afterAll.
+        at_exit do
+          require_relative 'cleanup'
+          Cleanup.run # Simulates application shutdown after Middleware initialization.
+        end
       RUBY
       [['init', '-q'], ['config', 'user.name', 'Test'], ['config', 'user.email', 'test@example.invalid'],
        ['add', '.'], ['commit', '-qm', 'worker final snapshot']].each do |args|

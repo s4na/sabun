@@ -5,6 +5,16 @@ require_relative 'recorder'
 
 module Sabun
   module E2E
+    def self.register_worker(middleware)
+      (@worker_middlewares ||= []) << middleware
+    end
+
+    # e2e/boot is preloaded before Rails application shutdown handlers. This
+    # dispatcher therefore runs after those later-registered handlers.
+    at_exit do
+      Array(@worker_middlewares).each { |middleware| middleware.send(:finalize_worker!) }
+    end
+
     class Middleware
       def initialize(app)
         @app = app
@@ -15,7 +25,7 @@ module Sabun
         @last_snapshot = Recorder.snapshot
         @common = nil
         @worker_identity = Recorder.worker_identity
-        at_exit { finalize_worker! }
+        E2E.register_worker(self)
       end
 
       def call(env)

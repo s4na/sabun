@@ -43,7 +43,24 @@ module Sabun
       files = %w[Gemfile.lock .ruby-version package-lock.json yarn.lock pnpm-lock.yaml]
       files << "#{File.expand_path(ENV['BUNDLE_GEMFILE'], root)}.lock" if ENV['BUNDLE_GEMFILE']
       digests = files.to_h { |path| [path, File.file?(File.expand_path(path, root)) ? Digest::SHA256.file(File.expand_path(path, root)).hexdigest : nil] }
-      Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests, config]))
+      ignored_sources = ignored_source_digests(root: root)
+      Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests, ignored_sources, config]))
+    end
+
+    def ignored_source_digests(root: self.root)
+      extensions = %w[.rb .js .mjs .cjs .ts .tsx .jsx .css .scss .sass .erb .html .haml .slim .yml .yaml .json .sql]
+      excluded = %w[node_modules vendor/bundle vendor/cache .bundle tmp log coverage .git]
+      paths = git('ls-files', '--others', '--ignored', '--exclude-standard', '-z', root: root)
+                .split("\0").select do |path|
+        extensions.include?(File.extname(path).downcase) &&
+          excluded.none? { |prefix| path == prefix || path.start_with?("#{prefix}/") }
+      end
+      paths.sort.to_h do |path|
+        absolute = File.expand_path(path, root)
+        [path, File.file?(absolute) ? Digest::SHA256.file(absolute).hexdigest : nil]
+      end
+    rescue Error
+      {}
     end
 
     def assert_clean!

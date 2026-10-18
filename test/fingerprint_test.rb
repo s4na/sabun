@@ -58,4 +58,20 @@ class FingerprintTest < Minitest::Test
       end
     end
   end
+
+  def test_ignored_source_changes_invalidate_the_fingerprint
+    Dir.mktmpdir do |root|
+      system('git', '-C', root, 'init', '-q')
+      File.write(File.join(root, '.gitignore'), "app/generated.rb\n")
+      source = File.join(root, 'app/generated.rb')
+      FileUtils.mkdir_p(File.dirname(source))
+      File.write(source, "class Generated; def self.value = 1; end\n")
+
+      before = Sabun::Core.fingerprint(root: root)
+      File.write(source, "class Generated; def self.value = 2; end\n")
+      after = Sabun::Core.fingerprint(root: root)
+
+      refute_equal before, after
+    end
+  end
 end
