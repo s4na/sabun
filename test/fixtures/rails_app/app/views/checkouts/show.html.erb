@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <title>Checkout</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <h1>Checkout</h1>
+  <span id="price"><%= @price %></span>
+  <span id="banner"><%= @banner %></span>
+  <button id="details-button" type="button">Details</button>
+  <p id="details"></p>
+  <form action="/orders" method="post"><button type="submit">Buy</button></form>
+</body>
+</html>
