@@ -5,15 +5,22 @@ const path = require('node:path');
 const { setTimeout: delay } = require('node:timers/promises');
 const { test: base, expect } = require(path.join(process.env.SABUN_SOURCE, 'playwright/sabun.js'));
 
-async function unusedPort() {
-  const socket = net.createServer();
-  await new Promise((resolve, reject) => {
-    socket.once('error', reject);
-    socket.listen(0, '127.0.0.1', resolve);
-  });
-  const port = socket.address().port;
-  await new Promise(resolve => socket.close(resolve));
-  return port;
+async function unusedPort(parallelIndex) {
+  // Give each concurrent Playwright slot a disjoint range. Port 0 can be
+  // reused after the probe socket closes but before the Rails child binds it.
+  const firstPort = 30000 + parallelIndex * 100;
+  for (let offset = 0; offset < 100; offset += 1) {
+    const socket = net.createServer();
+    const port = firstPort + offset;
+    const available = await new Promise(resolve => {
+      socket.once('error', () => resolve(false));
+      socket.listen(port, '127.0.0.1', () => resolve(true));
+    });
+    if (!available) continue;
+    await new Promise(resolve => socket.close(resolve));
+    return port;
+  }
+  throw new Error(`No free Rails fixture port for Playwright slot ${parallelIndex}`);
 }
 
 async function stop(child) {
@@ -29,7 +36,7 @@ const test = base.extend({
     const root = process.cwd();
     const serverRoot = process.env.SABUN_FIXTURE_SERVER_ROOT || root;
     fs.mkdirSync(path.join(root, 'tmp'), { recursive: true });
-    const port = await unusedPort();
+    const port = await unusedPort(workerInfo.parallelIndex);
     const url = `http://127.0.0.1:${port}`;
     const log = path.join(root, 'tmp', `rails-worker-${workerInfo.workerIndex}.log`);
     const child = spawn(process.env.SABUN_RUBY, ['server.rb'], {
