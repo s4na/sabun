@@ -109,6 +109,33 @@ class SelectorTest < Minitest::Test
     assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
   end
 
+  def test_suite_wide_rspec_behavior_does_not_select_other_suites
+    write('e2e/checkout.spec.js', 'test checkout')
+    git('add', 'e2e/checkout.spec.js')
+    git('commit', '-qm', 'add browser spec')
+    @base = Sabun::Core.sha
+    @config = { 'suites' => [
+      { 'id' => 'spec', 'kind' => 'rspec', 'glob' => 'spec/*_spec.rb', 'command' => ['ruby', '-v'] },
+      { 'id' => 'browser', 'kind' => 'playwright', 'glob' => 'e2e/*.spec.js',
+        'projects' => ['chromium'], 'command' => ['npx', 'playwright', 'test'] }
+    ] }
+    browser_units = {
+      'e2e/checkout.spec.js::chromium' => { 'complete' => true, 'dependencies' => [] }
+    }
+    save_baseline('suite_ids' => %w[spec browser], 'units' => {
+      'spec' => @units, 'browser' => browser_units
+    })
+
+    write('spec/a_spec.rb', "RSpec.configure { |config| config.before(:suite) { true } }\n")
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'add suite-wide setup')
+
+    selection = plan.fetch('suites')
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], selection.fetch('spec').fetch('selected').sort
+    assert_empty selection.fetch('browser').fetch('selected')
+    assert_equal ['e2e/checkout.spec.js::chromium'], selection.fetch('browser').fetch('skipped')
+  end
+
   def test_changed_test_support_file_selects_recorded_consumers
     @units['spec/b_spec.rb']['dependencies'] = ['spec/a_spec.rb']
     save_baseline

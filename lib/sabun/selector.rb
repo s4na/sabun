@@ -101,6 +101,7 @@ module Sabun
       decisions = suites.to_h do |suite|
         id = suite.fetch('id')
         units = inventory.fetch(id)
+        suite_test_paths = units.map { |unit| unit.split('::', 2).first }.uniq
         observed = baseline_units.fetch(id, {})
         observed = {} unless observed.is_a?(Hash)
         selected = []
@@ -116,7 +117,8 @@ module Sabun
             if test_paths.include?(change['path'])
               # A configured test may also be required as executable support
               # code by another unit; preserve that recorded dependency.
-              if suite_wide_test_behavior?(change, baseline: map.fetch('commit'), head: current_head)
+              if suite_test_paths.include?(change['path']) &&
+                  suite_wide_test_behavior?(change, baseline: map.fetch('commit'), head: current_head)
                 why << "suite_wide_test_behavior:#{change['path']}"
               elsif valid_entry && entry['dependencies'].include?(change['path'])
                 why << "test_dependency:#{change['path']}"
