@@ -102,6 +102,7 @@ module Sabun
         if data['kind'] == 'worker_final'
           worker_id = data.fetch('worker_id')
           raise Error, 'incomplete E2E worker final snapshot' unless data['complete'] == true
+          raise Error, 'duplicate E2E worker final snapshot' if final_workers.key?(worker_id)
           final_workers[worker_id] = data.fetch('dependencies')
           next
         end

@@ -4,8 +4,23 @@ require 'tmpdir'
 require 'open3'
 require 'json'
 require 'rbconfig'
+require_relative '../lib/sabun/e2e'
 
 class WorkerIdentityTest < Minitest::Test
+  def test_worker_id_is_unique_and_stable_for_each_process
+    worker_id = Sabun::E2E.worker_id
+    assert_equal worker_id, Sabun::E2E.worker_id
+
+    forked_worker_id = Process.stub(:pid, Process.pid + 1) do
+      child_id = Sabun::E2E.worker_id
+      assert_equal child_id, Sabun::E2E.worker_id
+      child_id
+    end
+
+    refute_equal worker_id, forked_worker_id
+    assert_match(/\A[0-9a-f-]{36}\z/, worker_id)
+  end
+
   def test_worker_identity_remains_bound_to_the_boot_revision
     Dir.mktmpdir('sabun-worker-identity-') do |root|
       File.write(File.join(root, 'sabun.json'), JSON.generate('suites' => [

@@ -1,10 +1,19 @@
 # frozen_string_literal: true
 require 'json'
+require 'securerandom'
 require 'thread'
 require_relative 'recorder'
 
 module Sabun
   module E2E
+    def self.worker_id
+      pid = Process.pid
+      return @worker_id if @worker_pid == pid
+
+      @worker_pid = pid
+      @worker_id = SecureRandom.uuid
+    end
+
     def self.register_worker(middleware)
       (@worker_middlewares ||= []) << middleware
     end
@@ -85,7 +94,7 @@ module Sabun
             dependencies = (@common | Recorder.changed(@session[:snapshot], snapshot)).filter_map { |path| Core.relative(path) }
             @last_snapshot = snapshot
             @session = nil
-            respond(200, dependencies: dependencies, identity: @worker_identity, worker_id: Process.pid)
+            respond(200, dependencies: dependencies, identity: @worker_identity, worker_id: E2E.worker_id)
           else
             respond(400, error: 'unknown action')
           end
@@ -106,9 +115,10 @@ module Sabun
           dependencies = ((@common || []) | Recorder.changed(@last_snapshot, snapshot)).filter_map { |path| Core.relative(path) }
           directory = "#{output}.d"
           FileUtils.mkdir_p(directory)
-          filename = File.join(directory, "worker-#{Process.pid}.json")
+          worker_id = E2E.worker_id
+          filename = File.join(directory, "worker-#{worker_id}.json")
           Core.write_json(filename, {
-            'kind' => 'worker_final', 'worker_id' => Process.pid,
+            'kind' => 'worker_final', 'worker_id' => worker_id,
             'complete' => @active.zero? && identity == @worker_identity && !identity.nil?,
             'dependencies' => dependencies, 'identity' => identity
           })

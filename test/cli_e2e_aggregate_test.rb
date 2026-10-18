@@ -47,6 +47,17 @@ class CLIE2EAggregateTest < Minitest::Test
     assert_equal 'missing E2E worker final snapshot', error.message
   end
 
+  def test_duplicate_final_worker_id_cannot_hide_an_overwritten_snapshot
+    write_entry('worker-100.json', 'kind' => 'worker_final', 'worker_id' => 100,
+                                    'complete' => true, 'dependencies' => [], 'identity' => IDENTITY)
+    write_entry('worker-100-copy.json', 'kind' => 'worker_final', 'worker_id' => 100,
+                                         'complete' => true, 'dependencies' => [], 'identity' => IDENTITY)
+
+    error = assert_raises(Sabun::Error) { Sabun::CLI.new.send(:aggregate_e2e, @output, identity: IDENTITY) }
+
+    assert_equal 'duplicate E2E worker final snapshot', error.message
+  end
+
   private
 
   def write_entry(name, data)
