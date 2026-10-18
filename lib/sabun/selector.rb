@@ -65,7 +65,7 @@ module Sabun
 
   class Selector
     SCHEMA = 1
-    SUITE_WIDE_TEST_BEHAVIOR = /\bRSpec\.(?:configure|shared_context|shared_examples)\b|^\s*(?:class|module)\s+|\b(?:prepend|include)\s+/m
+    SUITE_WIDE_TEST_BEHAVIOR = /\bRSpec\.(?:configure|shared_context|shared_examples)\b|^\s*(?:class|module)\s+|\b(?:class_eval|module_eval|define_method|define_singleton_method|const_set|remove_method|alias_method|prepend|include)\b/m
 
     def initialize(root: Core.root)
       @root = root

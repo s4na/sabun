@@ -136,6 +136,17 @@ class SelectorTest < Minitest::Test
     assert_equal ['e2e/checkout.spec.js::chromium'], selection.fetch('browser').fetch('skipped')
   end
 
+  def test_spec_with_dynamic_monkey_patch_selects_its_suite
+    write('spec/a_spec.rb', <<~RUBY)
+      Object.class_eval { define_method(:sabun_global_hook) { true } }
+      Kernel.module_eval { define_method(:sabun_module_hook) { true } }
+    RUBY
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'add dynamic suite-wide behavior')
+
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
+  end
+
   def test_changed_test_support_file_selects_recorded_consumers
     @units['spec/b_spec.rb']['dependencies'] = ['spec/a_spec.rb']
     save_baseline
