@@ -63,5 +63,14 @@ module Sabun
       @finished = true
       flush!
     end
+
+    def finalize_rspec!
+      previous = @previous || {}
+      common = (@common || []) | changed(previous, snapshot)
+      records.each_value do |entry|
+        entry['dependencies'] |= common.filter_map { |dependency| Core.relative(dependency) }
+      end
+      finish!
+    end
   end
 end

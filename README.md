@@ -118,6 +118,8 @@ export SABUN_E2E_JOBS_SYNC=1
 
 reporterは全テストのIDを記録し、bridgeが計測したテストと照合します。bridgeを使用しないテストが混在すると記録が不完全として拒否されます。
 
+RSpecとE2Eの記録は、suite後に実行されるapplication shutdown hookも含めて完了します。計測用bootstrapが終了dispatcherを先に登録し、applicationの`at_exit`処理後に最終Coverage snapshotをflushします。
+
 ## 制限事項と安全性
 
 - RSpecの標準Coverageは単一プロセス前提です。複数プロセスの並列RSpecや、Railsアプリが別プロセスで動くrequest specはそのままでは計測できません。

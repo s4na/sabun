@@ -72,6 +72,7 @@ gemはCI・DB・ブラウザーのプロビジョニングを引き受けない�
 - Ruby `Coverage` のlines/methodsをアプリのロード前に開始し、ロード・定義・実行を区別する。
 - example前後のカウンター差分から実行依存を収集する。ただし標準Coverageは**プロセス全体**の値であり、並列テストの帰属を保証しない。
 - 起動時、共有before/after、suite/contextの処理、遅延autoloadは共通依存として扱う。初回exampleへだけ帰属させない。
+- process終了時に実行されるapplication shutdown hookも依存収集の対象とする。bootstrap時に先に登録したdispatcherが他の`at_exit` handler後に最終snapshotを取り、記録をflushする。
 - RSpecのセットアップ/後処理、Factory生成、request処理、描画を選択単位へ帰属させる。
 - `ActiveSupport::Notifications` のcontroller、template/partial、jobなどのイベントを補助依存として記録する。通知だけで全依存が取れると仮定しない。
 - Coverageの `oneshot_lines` をテストごとにclearして再利用しない。繰り返し実行行が再記録されないため。

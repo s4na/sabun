@@ -24,9 +24,11 @@ RSpec.configure do |config|
   end
   config.after(:suite) do
     previous = Sabun::Recorder.instance_variable_get(:@previous) || {}
-    trailing = Sabun::Recorder.changed(previous, Sabun::Recorder.snapshot)
+    snapshot = Sabun::Recorder.snapshot
+    trailing = Sabun::Recorder.changed(previous, snapshot)
     common = (Sabun::Recorder.instance_variable_get(:@common) || []) | trailing
     Sabun::Recorder.records.each_value { |entry| entry['dependencies'] |= common.filter_map { |dep| Sabun::Core.relative(dep) } }
-    Sabun::Recorder.finish!
+    Sabun::Recorder.instance_variable_set(:@previous, snapshot)
+    Sabun::Recorder.instance_variable_set(:@common, common)
   end
 end
