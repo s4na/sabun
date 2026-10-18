@@ -41,6 +41,30 @@ class RailsQualityTest < Minitest::Test
     end
   end
 
+  def test_failed_full_suite_cannot_promote_a_baseline
+    project = FixtureProject.new('rspec', 'rails-failed-record')
+    begin
+      assert_recorded(project)
+      baseline = project.read('tmp/baseline.json')
+      path = 'spec/requests/checkout_spec.rb'
+      project.write(path, project.read(path) + <<~RUBY)
+        RSpec.describe 'failed baseline guard' do
+          it('fails') { expect(true).to eq(false) }
+        end
+      RUBY
+      project.commit('add a failing example')
+
+      result = project.record('reject-failed-record')
+
+      assert_equal 2, result.status, project.diagnostic(result)
+      assert_match(/command failed/, result.stderr)
+      refute_empty project.examples(result).select { |example| example['status'] == 'failed' }
+      assert_equal baseline, project.read('tmp/baseline.json')
+    ensure
+      project.close
+    end
+  end
+
   def test_recording_cannot_stamp_the_original_commit_after_head_moves
     project = FixtureProject.new('rspec', 'rails-head-moved')
     begin

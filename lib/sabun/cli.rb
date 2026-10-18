@@ -80,12 +80,8 @@ module Sabun
             raise Error, "recorded units differ from configured inventory for #{id}"
           end
           units[id] = observed
+          assert_recording_state!(sha, fingerprint, config_path)
         end
-      end
-      Core.assert_clean!
-      raise Error, 'checkout changed during recording' unless Core.sha == sha
-      unless Core.fingerprint(root: root, config: Core.load_config(config_path)) == fingerprint
-        raise Error, 'environment or configuration changed during recording'
       end
       Core.write_json(args[:out], { 'schema_version' => 1, 'commit' => sha, 'fingerprint' => fingerprint, 'suite_ids' => config.fetch('suites').map { |s| s['id'] }, 'complete' => true, 'units' => units })
       puts "baseline written to #{args[:out]}"
@@ -155,6 +151,7 @@ module Sabun
         command = suite.fetch('command')
         if suite['kind'] == 'rspec'
           Core.command!(command + selected)
+          assert_execution_state!(expected_head, expected_fingerprint, args.fetch(:config, 'sabun.json'))
         else
           selected.group_by { |unit| unit.split('::', 2).last }.each do |project, units|
             files = units.map { |unit| unit.split('::', 2).first }
@@ -162,15 +159,27 @@ module Sabun
               'SABUN_CONFIG_PATH' => File.expand_path(args.fetch(:config, 'sabun.json'), Core.root),
               'SABUN_EXPECTED_IDENTITY' => JSON.generate('commit' => plan['head'], 'fingerprint' => plan['fingerprint'])
             })
+            assert_execution_state!(expected_head, expected_fingerprint, args.fetch(:config, 'sabun.json'))
           end
-        end
-        Core.assert_clean!
-        raise Error, 'checkout changed during selected execution' unless Core.sha == expected_head
-        unless Core.fingerprint(config: Core.load_config(args.fetch(:config, 'sabun.json'))) == expected_fingerprint
-          raise Error, 'environment or configuration changed during selected execution'
         end
       end
       0
+    end
+
+    def assert_recording_state!(sha, fingerprint, config_path)
+      Core.assert_clean!
+      raise Error, 'checkout changed during recording' unless Core.sha == sha
+      unless Core.fingerprint(root: Core.root, config: Core.load_config(config_path)) == fingerprint
+        raise Error, 'environment or configuration changed during recording'
+      end
+    end
+
+    def assert_execution_state!(head, fingerprint, config_path)
+      Core.assert_clean!
+      raise Error, 'checkout changed during selected execution' unless Core.sha == head
+      unless Core.fingerprint(config: Core.load_config(config_path)) == fingerprint
+        raise Error, 'environment or configuration changed during selected execution'
+      end
     end
   end
 end

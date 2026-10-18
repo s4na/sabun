@@ -96,6 +96,7 @@ module Sabun
       decisions = suites.to_h do |suite|
         id = suite.fetch('id')
         units = inventory.fetch(id)
+        test_paths = units.map { |unit| unit.split('::', 2).first }.uniq
         observed = map.fetch('units', {}).fetch(id, {})
         selected = []
         explanations = {}
@@ -106,7 +107,9 @@ module Sabun
           why << 'unobserved_or_incomplete' unless entry.is_a?(Hash) && entry['complete'] == true && entry['dependencies'].is_a?(Array)
           why << 'test_changed' if changes.any? { |change| change['path'] == unit.split('::', 2).first }
           changes.each do |change|
-            next if change['path'] == unit.split('::', 2).first
+            # A changed test file selects its own unit above; it must not fan
+            # out as an application-level structural change to sibling units.
+            next if test_paths.include?(change['path'])
             if change['scope'] == 'ruby_body'
               why << "ruby_dependency:#{change['path']}" if entry && entry.fetch('dependencies', []).include?(change['path'])
             else
