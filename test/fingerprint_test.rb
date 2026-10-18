@@ -74,4 +74,16 @@ class FingerprintTest < Minitest::Test
       refute_equal before, after
     end
   end
+
+  def test_ignored_playwright_results_do_not_change_the_fingerprint
+    Dir.mktmpdir do |root|
+      system('git', '-C', root, 'init', '-q')
+      File.write(File.join(root, '.gitignore'), "/test-results/\n")
+      before = Sabun::Core.fingerprint(root: root)
+      FileUtils.mkdir_p(File.join(root, 'test-results'))
+      File.write(File.join(root, 'test-results/.last-run.json'), '{"status":"passed"}')
+
+      assert_equal before, Sabun::Core.fingerprint(root: root)
+    end
+  end
 end

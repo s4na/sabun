@@ -49,7 +49,7 @@ module Sabun
 
     def ignored_source_digests(root: self.root)
       extensions = %w[.rb .js .mjs .cjs .ts .tsx .jsx .css .scss .sass .erb .html .haml .slim .yml .yaml .json .sql]
-      excluded = %w[node_modules vendor/bundle vendor/cache .bundle tmp log coverage .git]
+      excluded = %w[node_modules vendor/bundle vendor/cache .bundle tmp log coverage test-results .git]
       paths = git('ls-files', '--others', '--ignored', '--exclude-standard', '-z', root: root)
                 .split("\0").select do |path|
         extensions.include?(File.extname(path).downcase) &&
