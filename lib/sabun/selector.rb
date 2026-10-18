@@ -69,6 +69,13 @@ module Sabun
       shared_context shared_examples class_eval module_eval define_method define_singleton_method
       const_set remove_method alias_method
     ].freeze
+    SUITE_WIDE_ASSIGNMENT_TYPES = %i[
+      global_variable_write_node global_variable_and_write_node global_variable_or_write_node
+      global_variable_operator_write_node class_variable_write_node class_variable_and_write_node
+      class_variable_or_write_node class_variable_operator_write_node constant_write_node
+      constant_and_write_node constant_or_write_node constant_operator_write_node constant_path_write_node
+      constant_path_and_write_node constant_path_or_write_node constant_path_operator_write_node
+    ].freeze
 
     def initialize(root: Core.root)
       @root = root
@@ -168,6 +175,8 @@ module Sabun
           receiver_name = receiver.full_name if receiver.respond_to?(:full_name)
           found ||= (node.name == :configure && receiver_name == 'RSpec')
           found ||= SUITE_WIDE_DYNAMIC_CALLS.include?(node.name)
+          found ||= SUITE_WIDE_ASSIGNMENT_TYPES.include?(node.type)
+          found ||= receiver_name == 'ENV' && %i[[]= store delete clear update replace].include?(node.name)
           found ||= %i[include prepend extend].include?(node.name) &&
             (receiver.is_a?(Prism::ConstantReadNode) || receiver.is_a?(Prism::ConstantPathNode))
         end

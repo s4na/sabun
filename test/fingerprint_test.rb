@@ -33,6 +33,17 @@ class FingerprintTest < Minitest::Test
     end
   end
 
+  def test_runtime_platform_is_part_of_the_fingerprint
+    Dir.mktmpdir do |root|
+      before = Sabun::Core.fingerprint(root: root)
+      other_platform = Sabun::Core.runtime_identity(platform: 'other-platform')
+
+      Sabun::Core.stub(:runtime_identity, other_platform) do
+        refute_equal before, Sabun::Core.fingerprint(root: root)
+      end
+    end
+  end
+
   def test_only_sabun_loader_options_are_ignored
     Dir.mktmpdir do |root|
       with_environment('RUBYOPT' => nil) do
@@ -89,6 +100,21 @@ class FingerprintTest < Minitest::Test
       after = Sabun::Core.fingerprint(root: root)
 
       refute_equal before, after
+    end
+  end
+
+  def test_ignored_extensionless_script_changes_invalidate_the_fingerprint
+    Dir.mktmpdir do |root|
+      system('git', '-C', root, 'init', '-q')
+      File.write(File.join(root, '.gitignore'), "bin/generated\n")
+      script = File.join(root, 'bin/generated')
+      FileUtils.mkdir_p(File.dirname(script))
+      File.write(script, "#!/usr/bin/env ruby\nputs 1\n")
+      File.chmod(0o755, script)
+
+      before = Sabun::Core.fingerprint(root: root)
+      File.write(script, "#!/usr/bin/env ruby\nputs 2\n")
+      refute_equal before, Sabun::Core.fingerprint(root: root)
     end
   end
 

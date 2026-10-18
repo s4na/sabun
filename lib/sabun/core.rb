@@ -52,7 +52,12 @@ module Sabun
         [key, File.file?(absolute) ? Digest::SHA256.file(absolute).hexdigest : nil]
       end
       ignored_sources = ignored_source_digests(root: root)
-      Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests, ignored_sources, config]))
+      Digest::SHA256.hexdigest(JSON.generate([runtime_identity, env, digests, ignored_sources, config]))
+    end
+
+    def runtime_identity(platform: RUBY_PLATFORM)
+      [RUBY_ENGINE, (defined?(RUBY_ENGINE_VERSION) ? RUBY_ENGINE_VERSION : RUBY_VERSION),
+       RUBY_VERSION, (defined?(RUBY_PATCHLEVEL) ? RUBY_PATCHLEVEL : nil), platform]
     end
 
     def ignored_source_digests(root: self.root)
@@ -60,8 +65,8 @@ module Sabun
       excluded = %w[node_modules vendor/bundle vendor/cache .bundle tmp log coverage test-results .git]
       paths = git('ls-files', '--others', '--ignored', '--exclude-standard', '-z', root: root)
                 .split("\0").select do |path|
-        extensions.include?(File.extname(path).downcase) &&
-          excluded.none? { |prefix| path == prefix || path.start_with?("#{prefix}/") }
+        excluded.none? { |prefix| path == prefix || path.start_with?("#{prefix}/") } &&
+          ignored_source_path?(path, extensions: extensions, root: root)
       end
       paths.sort.to_h do |path|
         absolute = File.expand_path(path, root)
@@ -69,6 +74,17 @@ module Sabun
       end
     rescue Error
       {}
+    end
+
+    def ignored_source_path?(path, extensions:, root:)
+      return true if extensions.include?(File.extname(path).downcase)
+      return false unless File.extname(path).empty?
+
+      absolute = File.join(root, path)
+      return false unless File.file?(absolute)
+
+      sample = File.binread(absolute, 4096)
+      !sample.include?("\0")
     end
 
     def assert_clean!

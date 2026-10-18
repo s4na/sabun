@@ -164,6 +164,18 @@ class SelectorTest < Minitest::Test
     assert_equal ['spec/b_spec.rb'], plan['suites']['spec']['skipped']
   end
 
+  def test_spec_with_top_level_shared_assignments_selects_its_suite
+    write('spec/a_spec.rb', <<~RUBY)
+      $feature_enabled = false
+      SABUN_SHARED_FLAG = false
+      ENV['SABUN_SHARED_ENV'] = 'off'
+    RUBY
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'change suite-wide shared state')
+
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
+  end
+
   def test_changed_test_support_file_selects_recorded_consumers
     @units['spec/b_spec.rb']['dependencies'] = ['spec/a_spec.rb']
     save_baseline
