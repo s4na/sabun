@@ -56,6 +56,14 @@ module Sabun
             respond(200, ok: true, identity: @worker_identity)
           when 'finish'
             return respond(409, error: 'test ID mismatch') unless @session && @session[:id] == id
+            if data.key?('identity')
+              Recorder.capture_worker_identity!
+              @worker_identity = Recorder.worker_identity
+              unless @worker_identity && data['identity'] == @worker_identity
+                @session = nil
+                return respond(409, error: 'worker identity mismatch')
+              end
+            end
             dependencies = (@common | Recorder.changed(@session[:snapshot], Recorder.snapshot)).filter_map { |path| Core.relative(path) }
             @session = nil
             respond(200, dependencies: dependencies, identity: @worker_identity)

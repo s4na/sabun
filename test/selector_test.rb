@@ -119,4 +119,32 @@ class SelectorTest < Minitest::Test
     assert_equal %w[chromium firefox].map { |p| "e2e/shipping.spec.js::#{p}" }.sort, selection['skipped'].sort
   end
 
+  def test_test_file_changes_do_not_fan_out_across_suites
+    write('e2e/checkout.spec.js', 'test checkout')
+    git('add', 'e2e/checkout.spec.js')
+    git('commit', '-qm', 'add browser spec')
+    @base = Sabun::Core.sha
+    @config = { 'suites' => [
+      { 'id' => 'spec', 'kind' => 'rspec', 'glob' => 'spec/*_spec.rb', 'command' => ['ruby', '-v'] },
+      { 'id' => 'browser', 'kind' => 'playwright', 'glob' => 'e2e/*.spec.js',
+        'projects' => ['chromium'], 'command' => ['npx', 'playwright', 'test'] }
+    ] }
+    save_baseline(
+      'suite_ids' => %w[spec browser],
+      'units' => {
+        'spec' => @units,
+        'browser' => { 'e2e/checkout.spec.js::chromium' => { 'complete' => true, 'dependencies' => [] } }
+      }
+    )
+
+    write('spec/a_spec.rb', '# changed')
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'change RSpec file')
+    selection = plan.fetch('suites')
+
+    assert_equal ['spec/a_spec.rb'], selection.fetch('spec').fetch('selected')
+    assert_empty selection.fetch('browser').fetch('selected')
+    assert_equal ['e2e/checkout.spec.js::chromium'], selection.fetch('browser').fetch('skipped')
+  end
+
 end

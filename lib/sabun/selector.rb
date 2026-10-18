@@ -72,11 +72,14 @@ module Sabun
 
     def plan(config:, baseline_path:, head: 'HEAD')
       map = Core.read_json(baseline_path)
+      map = {} unless map.is_a?(Hash)
       suites = config.fetch('suites')
       inventory = Core.inventory(config, root: @root)
       current_head = Core.sha(head, root: @root)
       changes = nil
       reasons = []
+      baseline_units = map.fetch('units', {})
+      baseline_units = {} unless baseline_units.is_a?(Hash)
       if map['schema_version'] != SCHEMA || !map['complete']
         reasons << 'invalid_or_incomplete_baseline'
       elsif map['fingerprint'] != Core.fingerprint(root: @root, config: config)
@@ -93,25 +96,27 @@ module Sabun
         end
       end
       changes ||= []
+      test_paths = inventory.values.flatten.map { |unit| unit.split('::', 2).first }.uniq
       decisions = suites.to_h do |suite|
         id = suite.fetch('id')
         units = inventory.fetch(id)
-        test_paths = units.map { |unit| unit.split('::', 2).first }.uniq
-        observed = map.fetch('units', {}).fetch(id, {})
+        observed = baseline_units.fetch(id, {})
+        observed = {} unless observed.is_a?(Hash)
         selected = []
         explanations = {}
         units.each do |unit|
           why = []
           why.concat(reasons)
           entry = observed[unit]
-          why << 'unobserved_or_incomplete' unless entry.is_a?(Hash) && entry['complete'] == true && entry['dependencies'].is_a?(Array)
+          valid_entry = valid_observation?(entry)
+          why << 'unobserved_or_incomplete' unless valid_entry
           why << 'test_changed' if changes.any? { |change| change['path'] == unit.split('::', 2).first }
           changes.each do |change|
-            # A changed test file selects its own unit above; it must not fan
-            # out as an application-level structural change to sibling units.
+            # Changed test files select their own units above; they must not
+            # fan out as application-level structural changes across suites.
             next if test_paths.include?(change['path'])
             if change['scope'] == 'ruby_body'
-              why << "ruby_dependency:#{change['path']}" if entry && entry.fetch('dependencies', []).include?(change['path'])
+              why << "ruby_dependency:#{change['path']}" if valid_entry && entry['dependencies'].include?(change['path'])
             else
               why << "unclassified_or_structural:#{change['path']}"
             end
@@ -122,6 +127,15 @@ module Sabun
         [id, { 'kind' => suite.fetch('kind'), 'selected' => selected, 'skipped' => units - selected, 'reasons' => explanations }]
       end
       { 'schema_version' => SCHEMA, 'head' => current_head, 'baseline' => map['commit'], 'fingerprint' => Core.fingerprint(root: @root, config: config), 'changes' => changes, 'suites' => decisions }
+    end
+
+    private
+
+    def valid_observation?(entry)
+      entry.is_a?(Hash) && entry['complete'] == true && entry['dependencies'].is_a?(Array) &&
+        entry['dependencies'].all? { |dependency| dependency.is_a?(String) && Core.relative(dependency, @root) == dependency }
+    rescue ArgumentError, TypeError
+      false
     end
   end
 end

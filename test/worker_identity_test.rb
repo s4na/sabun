@@ -40,4 +40,47 @@ class WorkerIdentityTest < Minitest::Test
       assert_equal 'worker identity mismatch', response['body']['error']
     end
   end
+
+  def test_finish_rejects_a_worker_checkout_changed_during_the_session
+    Dir.mktmpdir('sabun-worker-finish-') do |root|
+      File.write(File.join(root, 'sabun.json'), JSON.generate('suites' => [
+        { 'id' => 'spec', 'kind' => 'rspec', 'glob' => '*.rb', 'command' => ['ruby'] }
+      ]))
+      File.write(File.join(root, 'tracked.rb'), "VALUE = 1\n")
+      File.write(File.join(root, 'run.rb'), <<~RUBY)
+        require 'sabun/e2e'
+        require 'stringio'
+        identity = Sabun::Recorder.worker_identity
+        app = Sabun::E2E::Middleware.new(->(_) do
+          File.write('tracked.rb', "VALUE = 2\\n")
+          [200, {}, ['OK']]
+        end)
+        control = lambda do |action|
+          app.call('PATH_INFO' => '/__sabun__/control', 'REQUEST_METHOD' => 'POST',
+            'HTTP_AUTHORIZATION' => 'Bearer test-token',
+            'rack.input' => StringIO.new(JSON.generate(action: action, id: 'test', identity: identity)))
+        end
+        raise 'start rejected' unless control.call('start')[0] == 200
+        response = app.call('PATH_INFO' => '/request')
+        response[2].each { |_| }
+        status, _, body = control.call('finish')
+        puts JSON.generate(status: status, body: JSON.parse(body.join))
+      RUBY
+      [['init', '-q'], ['config', 'user.name', 'Test'], ['config', 'user.email', 'test@example.invalid'],
+       ['add', '.'], ['commit', '-qm', 'worker session']].each do |args|
+        _, err, status = Open3.capture3('git', '-C', root, *args)
+        assert status.success?, err
+      end
+      lib = File.expand_path('../lib', __dir__)
+      out, err, status = Open3.capture3(
+        { 'SABUN_ROOT' => root, 'SABUN_E2E_TOKEN' => 'test-token', 'SABUN_E2E_JOBS_SYNC' => '1' },
+        RbConfig.ruby, '-I', lib, '-rsabun/e2e/boot', 'run.rb', chdir: root
+      )
+
+      assert status.success?, "#{out}\n#{err}"
+      response = JSON.parse(out)
+      assert_equal 409, response['status']
+      assert_equal 'worker identity mismatch', response['body']['error']
+    end
+  end
 end

@@ -86,12 +86,27 @@ class QualityContractTest < Minitest::Test
     assert_equal 2, selected.size
   end
 
+  def test_non_object_baseline_must_select_all
+    File.write(@baseline, JSON.generate([]))
+    assert_equal 2, selected.size
+  end
+
   def test_missing_dependency_data_must_not_be_skipped
     save_map('units' => { 'spec' => {
       'spec/service_spec.rb' => { 'complete' => true, 'dependencies' => ['app/service.rb'] },
       'spec/other_spec.rb' => { 'complete' => false, 'dependencies' => [] }
     } })
     assert_includes selected, 'spec/other_spec.rb'
+  end
+
+  def test_malformed_dependency_data_must_not_be_skipped
+    save_map('units' => { 'spec' => {
+      'spec/service_spec.rb' => { 'complete' => true, 'dependencies' => [nil] },
+      'spec/other_spec.rb' => { 'complete' => true, 'dependencies' => [] }
+    } })
+    commit('app/service.rb', "class Service\n  def self.value\n    2\n  end\nend\n")
+
+    assert_equal ['spec/service_spec.rb'], selected
   end
 
   def test_new_test_is_always_selected
