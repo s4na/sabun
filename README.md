@@ -112,6 +112,8 @@ export SABUN_E2E_JOBS_SYNC=1
 
 `{parallelIndex}` はworkerのスロット番号へ置換されます。workerごとにRails・DB・cache・job環境を分離し、同一worker内でテストを同時実行しないでください。サーバーへ他のトラフィックを混ぜると、プロセス単位のCoverageが誤帰属します。
 
+`record`時はRails workerが終了する際にも最終Coverageを収集します。Playwright workerごとのRails serverはsuite終了後に正常終了させてください。最終記録がないworkerは不完全としてbaselineへ昇格しません。各テスト間やPlaywrightの`afterAll`で実行されたRails処理の依存は、E2E suite共通の依存として各unitへ加えます。
+
 **`SABUN_E2E_JOBS_SYNC=1` は必要なジョブがすべて同期的に完了することの宣言です。gemはジョブの完了を自動検証しません。** 非同期ジョブが残る環境では差分選択を有効化しないでください。tokenはテスト専用で、公開サーバーにこのmiddlewareを導入しないでください。
 
 reporterは全テストのIDを記録し、bridgeが計測したテストと照合します。bridgeを使用しないテストが混在すると記録が不完全として拒否されます。

@@ -83,4 +83,45 @@ class WorkerIdentityTest < Minitest::Test
       assert_equal 'worker identity mismatch', response['body']['error']
     end
   end
+
+  def test_worker_shutdown_records_dependencies_executed_after_the_last_session
+    Dir.mktmpdir('sabun-worker-final-') do |root|
+      File.write(File.join(root, 'sabun.json'), JSON.generate('suites' => [
+        { 'id' => 'browser', 'kind' => 'playwright', 'glob' => '*.js', 'projects' => ['chromium'], 'command' => ['node'] }
+      ]))
+      File.write(File.join(root, 'cleanup.rb'), "module Cleanup; def self.run; 1; end; end\n")
+      File.write(File.join(root, 'run.rb'), <<~RUBY)
+        require 'sabun/e2e'
+        require 'stringio'
+        identity = Sabun::Recorder.worker_identity
+        app = Sabun::E2E::Middleware.new(->(_) { [200, {}, ['OK']] })
+        control = lambda do |action|
+          app.call('PATH_INFO' => '/__sabun__/control', 'REQUEST_METHOD' => 'POST',
+            'HTTP_AUTHORIZATION' => 'Bearer test-token',
+            'rack.input' => StringIO.new(JSON.generate(action: action, id: 'test', identity: identity)))
+        end
+        raise 'start rejected' unless control.call('start')[0] == 200
+        raise 'finish rejected' unless control.call('finish')[0] == 200
+        require_relative 'cleanup'
+        Cleanup.run # Simulates a Rails request made by Playwright afterAll.
+      RUBY
+      [['init', '-q'], ['config', 'user.name', 'Test'], ['config', 'user.email', 'test@example.invalid'],
+       ['add', '.'], ['commit', '-qm', 'worker final snapshot']].each do |args|
+        _, err, status = Open3.capture3('git', '-C', root, *args)
+        assert status.success?, err
+      end
+      lib = File.expand_path('../lib', __dir__)
+      output = File.join(root, 'tmp', 'record')
+      out, err, status = Open3.capture3(
+        { 'SABUN_ROOT' => root, 'SABUN_RECORD_FILE' => output,
+          'SABUN_E2E_TOKEN' => 'test-token', 'SABUN_E2E_JOBS_SYNC' => '1' },
+        RbConfig.ruby, '-I', lib, '-rsabun/e2e/boot', 'run.rb', chdir: root
+      )
+
+      assert status.success?, "#{out}\n#{err}"
+      final = Dir.glob("#{output}.d/worker-*.json").map { |path| JSON.parse(File.read(path)) }.fetch(0)
+      assert_equal true, final['complete']
+      assert_includes final['dependencies'], 'cleanup.rb'
+    end
+  end
 end

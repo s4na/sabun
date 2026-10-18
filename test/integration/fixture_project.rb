@@ -197,6 +197,10 @@ module SelectionQualityAssertions
     refute_includes shipping['dependencies'], 'app/services/price.rb'
     assert_includes order['dependencies'], 'app/jobs/receipt_job.rb'
     assert_includes checkout['dependencies'], 'app/services/boot_label.rb'
+    if @kind == 'playwright'
+      assert units.values.all? { |unit| unit['dependencies'].include?('app/services/cleanup.rb') },
+        'suite-level afterAll dependencies must be shared with every Playwright unit'
+    end
     examples
   end
 

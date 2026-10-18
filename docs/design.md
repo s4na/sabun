@@ -85,6 +85,8 @@ gemはCI・DB・ブラウザーのプロビジョニングを引き受けない�
 
 Playwright bridgeは `testId / project / workerIndex / parallelIndex / retry / run generation` と対応するRails workerへ送る識別子を管理する。ブラウザーから管理対象のRailsへ送るリクエストと、そこから発生したjobの依存を同じテストへ帰属させる。外部サービスに識別ヘッダーを漏らさない。
 
+テスト間とsuite終了時のRails依存は、workerの終了時に最終Coverage snapshotを取得してE2E suite共通の依存へ集約する。最終snapshotがないworkerは記録不完全としてbaselineへ昇格させない。このためrecord中のRails workerはPlaywright suite終了後に正常終了する必要がある。
+
 HTTP応答終了だけでは観測を閉じず、必要なjobの完了・失敗・再試行・追跡欠損を判定する。ジョブ完了を追えない場合はそのテストの依存マップを不完全として扱う。worker再起動時にはrun generationを更新し、旧workerのイベント混入を防ぐ。
 
 URL/controllerの対応は補助索引であり、別の入力条件で通ったrequest specの依存をE2Eへコピーして済ませない。

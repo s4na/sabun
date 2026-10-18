@@ -94,15 +94,27 @@ module Sabun
       expected = manifest.fetch('tests')
       seen = Set.new
       units = {}
+      worker_ids = Set.new
+      final_workers = {}
       entries.each do |path|
         data = Core.read_json(path)
         raise Error, 'worker identity mismatch in recording' unless data['identity'] == identity
+        if data['kind'] == 'worker_final'
+          worker_id = data.fetch('worker_id')
+          raise Error, 'incomplete E2E worker final snapshot' unless data['complete'] == true
+          final_workers[worker_id] = data.fetch('dependencies')
+          next
+        end
         unit = data.fetch('unit')
         seen << data.fetch('test_id')
+        worker_ids << data.fetch('worker_id')
         entry = (units[unit] ||= { 'complete' => true, 'dependencies' => [] })
         entry['complete'] &&= data['complete'] == true
         entry['dependencies'] |= data.fetch('dependencies')
       end
+      raise Error, 'missing E2E worker final snapshot' unless (worker_ids - final_workers.keys.to_set).empty?
+      final_dependencies = worker_ids.flat_map { |worker_id| final_workers.fetch(worker_id) }.uniq
+      units.each_value { |unit| unit['dependencies'] |= final_dependencies }
       { 'complete' => manifest['complete'] == true && !expected.empty? && (expected - seen.to_a).empty? && units.values.all? { |unit| unit['complete'] }, 'units' => units }
     end
 

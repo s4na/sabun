@@ -11,7 +11,11 @@ module Sabun
         @mutex = Mutex.new
         @active = 0
         @session = nil
+        Recorder.start!
+        @last_snapshot = Recorder.snapshot
+        @common = nil
         @worker_identity = Recorder.worker_identity
+        at_exit { finalize_worker! }
       end
 
       def call(env)
@@ -50,9 +54,12 @@ module Sabun
             end
             return respond(409, error: 'overlapping test') if @session
             snapshot = Recorder.snapshot
+            # テスト間に実行されたRails処理も、後続unitに共通依存として帰属させる。
+            @common |= Recorder.changed(@last_snapshot, snapshot) if @common
             # 起動時に計算・保存された値は、リクエスト中に再実行されなくても依存する。
             @common ||= Recorder.changed({}, snapshot, methods_only: true)
             @session = { id: id, snapshot: snapshot }
+            @last_snapshot = snapshot
             respond(200, ok: true, identity: @worker_identity)
           when 'finish'
             return respond(409, error: 'test ID mismatch') unless @session && @session[:id] == id
@@ -64,15 +71,40 @@ module Sabun
                 return respond(409, error: 'worker identity mismatch')
               end
             end
-            dependencies = (@common | Recorder.changed(@session[:snapshot], Recorder.snapshot)).filter_map { |path| Core.relative(path) }
+            snapshot = Recorder.snapshot
+            dependencies = (@common | Recorder.changed(@session[:snapshot], snapshot)).filter_map { |path| Core.relative(path) }
+            @last_snapshot = snapshot
             @session = nil
-            respond(200, dependencies: dependencies, identity: @worker_identity)
+            respond(200, dependencies: dependencies, identity: @worker_identity, worker_id: Process.pid)
           else
             respond(400, error: 'unknown action')
           end
         end
       rescue JSON::ParserError, KeyError
         respond(400, error: 'invalid JSON')
+      end
+
+      def finalize_worker!
+        output = ENV['SABUN_RECORD_FILE']
+        return unless output
+
+        @mutex.synchronize do
+          return if @session
+          snapshot = Recorder.snapshot
+          Recorder.capture_worker_identity!
+          identity = Recorder.worker_identity
+          dependencies = ((@common || []) | Recorder.changed(@last_snapshot, snapshot)).filter_map { |path| Core.relative(path) }
+          directory = "#{output}.d"
+          FileUtils.mkdir_p(directory)
+          filename = File.join(directory, "worker-#{Process.pid}.json")
+          Core.write_json(filename, {
+            'kind' => 'worker_final', 'worker_id' => Process.pid,
+            'complete' => @active.zero? && identity == @worker_identity && !identity.nil?,
+            'dependencies' => dependencies, 'identity' => identity
+          })
+        end
+      rescue StandardError
+        # Finalization failure must be visible as a missing worker marker to the CLI.
       end
 
       def respond(status, data)

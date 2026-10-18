@@ -40,7 +40,7 @@ const test = base.extend({
         const dir = `${output}.d`;
         fs.mkdirSync(dir, { recursive: true });
         const filename = path.join(dir, `${crypto.randomUUID()}.json`);
-        fs.writeFileSync(filename, JSON.stringify({ unit, test_id: testInfo.testId, complete: testInfo.status === 'passed', dependencies: result.dependencies, identity: result.identity }));
+        fs.writeFileSync(filename, JSON.stringify({ unit, test_id: testInfo.testId, complete: testInfo.status === 'passed', dependencies: result.dependencies, identity: result.identity, worker_id: result.worker_id }));
       }
     }
   }, { auto: true }],

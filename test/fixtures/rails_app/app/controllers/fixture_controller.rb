@@ -4,4 +4,9 @@ class FixtureController < ActionController::Base
     Rails.cache.clear
     head :no_content
   end
+
+  def cleanup
+    Cleanup.run
+    head :no_content
+  end
 end

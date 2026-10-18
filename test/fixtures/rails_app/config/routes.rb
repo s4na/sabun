@@ -5,4 +5,5 @@ Rails.application.routes.draw do
   post '/orders', to: 'orders#create'
   get '/orders/:id', to: 'orders#show'
   post '/__fixture__/reset', to: 'fixture#reset'
+  get '/__fixture__/cleanup', to: 'fixture#cleanup'
 end
