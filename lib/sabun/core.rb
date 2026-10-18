@@ -52,12 +52,23 @@ module Sabun
         [key, File.file?(absolute) ? Digest::SHA256.file(absolute).hexdigest : nil]
       end
       ignored_sources = ignored_source_digests(root: root)
-      Digest::SHA256.hexdigest(JSON.generate([runtime_identity, env, digests, ignored_sources, config]))
+      Digest::SHA256.hexdigest(JSON.generate([runtime_identity(config: config), env, digests, ignored_sources, config]))
     end
 
-    def runtime_identity(platform: RUBY_PLATFORM)
+    def runtime_identity(config: nil, platform: RUBY_PLATFORM)
       [RUBY_ENGINE, (defined?(RUBY_ENGINE_VERSION) ? RUBY_ENGINE_VERSION : RUBY_VERSION),
-       RUBY_VERSION, (defined?(RUBY_PATCHLEVEL) ? RUBY_PATCHLEVEL : nil), platform]
+       RUBY_VERSION, (defined?(RUBY_PATCHLEVEL) ? RUBY_PATCHLEVEL : nil), platform,
+       playwright_runtime_identity(config: config)]
+    end
+
+    def playwright_runtime_identity(config:)
+      suites = (config || {}).fetch('suites', [])
+      return nil unless suites.any? { |suite| suite['kind'] == 'playwright' }
+
+      version, _error, status = Open3.capture3('node', '--version')
+      status.success? ? version.strip : 'unavailable'
+    rescue SystemCallError
+      'unavailable'
     end
 
     def ignored_source_digests(root: self.root)

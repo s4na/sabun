@@ -165,13 +165,25 @@ class SelectorTest < Minitest::Test
   end
 
   def test_spec_with_top_level_shared_assignments_selects_its_suite
-    write('spec/a_spec.rb', <<~RUBY)
-      $feature_enabled = false
-      SABUN_SHARED_FLAG = false
-      ENV['SABUN_SHARED_ENV'] = 'off'
-    RUBY
+    write('spec/a_spec.rb', "$feature_enabled = false\n")
     git('add', 'spec/a_spec.rb')
     git('commit', '-qm', 'change suite-wide shared state')
+
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
+  end
+
+  def test_spec_with_top_level_class_variable_assignment_selects_its_suite
+    write('spec/a_spec.rb', "@@feature_enabled = false\n")
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'change shared class variable')
+
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
+  end
+
+  def test_spec_with_top_level_constant_assignment_selects_its_suite
+    write('spec/a_spec.rb', "SABUN_FEATURE_ENABLED = false\n")
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'change shared constant')
 
     assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
   end
@@ -199,6 +211,20 @@ class SelectorTest < Minitest::Test
 
   def test_empty_change_skips_observed_tests
     assert_empty plan['suites']['spec']['selected']
+  end
+
+  def test_plan_reuses_the_same_fingerprint_for_validation_and_output
+    save_baseline('fingerprint' => 'decision-fingerprint')
+    fingerprint = 'decision-fingerprint'
+    fingerprints = []
+    result = nil
+    Sabun::Core.stub(:fingerprint, ->(**_args) { fingerprints << fingerprint; fingerprint }) do
+      result = plan
+    end
+
+    assert_equal ['decision-fingerprint'], fingerprints
+    assert_equal 'decision-fingerprint', result['fingerprint']
+    refute_includes result['suites']['spec']['reasons']['spec/a_spec.rb'], 'environment_mismatch'
   end
 
   def test_nested_definition_change_is_structural

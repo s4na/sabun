@@ -87,13 +87,14 @@ module Sabun
       suites = config.fetch('suites')
       inventory = Core.inventory(config, root: @root)
       current_head = Core.sha(head, root: @root)
+      current_fingerprint = Core.fingerprint(root: @root, config: config)
       changes = nil
       reasons = []
       baseline_units = map.fetch('units', {})
       baseline_units = {} unless baseline_units.is_a?(Hash)
       if map['schema_version'] != SCHEMA || !map['complete']
         reasons << 'invalid_or_incomplete_baseline'
-      elsif map['fingerprint'] != Core.fingerprint(root: @root, config: config)
+      elsif map['fingerprint'] != current_fingerprint
         reasons << 'environment_mismatch'
       elsif map['suite_ids'] != suites.map { |s| s['id'] }
         reasons << 'suite_inventory_changed'
@@ -146,7 +147,7 @@ module Sabun
         end
         [id, { 'kind' => suite.fetch('kind'), 'selected' => selected, 'skipped' => units - selected, 'reasons' => explanations }]
       end
-      { 'schema_version' => SCHEMA, 'head' => current_head, 'baseline' => map['commit'], 'fingerprint' => Core.fingerprint(root: @root, config: config), 'changes' => changes, 'suites' => decisions }
+      { 'schema_version' => SCHEMA, 'head' => current_head, 'baseline' => map['commit'], 'fingerprint' => current_fingerprint, 'changes' => changes, 'suites' => decisions }
     end
 
     private
@@ -170,12 +171,14 @@ module Sabun
       traverse = lambda do |node|
         if node.is_a?(Prism::ClassNode) || node.is_a?(Prism::ModuleNode)
           found = true
-        elsif node.is_a?(Prism::CallNode)
+        else
+          found ||= SUITE_WIDE_ASSIGNMENT_TYPES.include?(node.type)
+        end
+        if node.is_a?(Prism::CallNode) && !found
           receiver = node.receiver
           receiver_name = receiver.full_name if receiver.respond_to?(:full_name)
           found ||= (node.name == :configure && receiver_name == 'RSpec')
           found ||= SUITE_WIDE_DYNAMIC_CALLS.include?(node.name)
-          found ||= SUITE_WIDE_ASSIGNMENT_TYPES.include?(node.type)
           found ||= receiver_name == 'ENV' && %i[[]= store delete clear update replace].include?(node.name)
           found ||= %i[include prepend extend].include?(node.name) &&
             (receiver.is_a?(Prism::ConstantReadNode) || receiver.is_a?(Prism::ConstantPathNode))

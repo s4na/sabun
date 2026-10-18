@@ -44,6 +44,17 @@ class FingerprintTest < Minitest::Test
     end
   end
 
+  def test_playwright_node_runtime_is_part_of_the_fingerprint
+    config = { 'suites' => [{ 'id' => 'browser', 'kind' => 'playwright' }] }
+    Dir.mktmpdir do |root|
+      before = Sabun::Core.fingerprint(root: root, config: config)
+
+      Sabun::Core.stub(:playwright_runtime_identity, 'v0.0.0') do
+        refute_equal before, Sabun::Core.fingerprint(root: root, config: config)
+      end
+    end
+  end
+
   def test_only_sabun_loader_options_are_ignored
     Dir.mktmpdir do |root|
       with_environment('RUBYOPT' => nil) do
