@@ -147,6 +147,23 @@ class SelectorTest < Minitest::Test
     assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
   end
 
+  def test_rspec_include_matcher_and_text_mentions_do_not_select_the_suite
+    write('spec/a_spec.rb', <<~RUBY)
+      # Object.class_eval { define_method(:hook) {} }
+      note = "RSpec.configure and module_eval are mentioned here"
+      RSpec.describe 'a' do
+        it 'matches a value' do
+          expect([1]).to include(1)
+        end
+      end
+    RUBY
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'change spec matcher')
+
+    assert_equal ['spec/a_spec.rb'], plan['suites']['spec']['selected']
+    assert_equal ['spec/b_spec.rb'], plan['suites']['spec']['skipped']
+  end
+
   def test_changed_test_support_file_selects_recorded_consumers
     @units['spec/b_spec.rb']['dependencies'] = ['spec/a_spec.rb']
     save_baseline

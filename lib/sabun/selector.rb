@@ -23,7 +23,7 @@ module Sabun
       before = Core.git('show', "#{@baseline}:#{path}", root: @root)
       after = Core.git('show', "#{@head}:#{path}", root: @root)
       method_body_only?(before, after) ? 'ruby_body' : 'structural'
-    rescue Error, LoadError, StandardError
+    rescue StandardError, LoadError
       'structural'
     end
 
@@ -65,7 +65,10 @@ module Sabun
 
   class Selector
     SCHEMA = 1
-    SUITE_WIDE_TEST_BEHAVIOR = /\bRSpec\.(?:configure|shared_context|shared_examples)\b|^\s*(?:class|module)\s+|\b(?:class_eval|module_eval|define_method|define_singleton_method|const_set|remove_method|alias_method|prepend|include)\b/m
+    SUITE_WIDE_DYNAMIC_CALLS = %i[
+      shared_context shared_examples class_eval module_eval define_method define_singleton_method
+      const_set remove_method alias_method
+    ].freeze
 
     def initialize(root: Core.root)
       @root = root
@@ -146,9 +149,32 @@ module Sabun
 
       before = Core.git('show', "#{baseline}:#{change['path']}", root: @root)
       after = Core.git('show', "#{head}:#{change['path']}", root: @root)
-      (before + "\n" + after).match?(SUITE_WIDE_TEST_BEHAVIOR)
-    rescue Error
+      require 'prism'
+      [before, after].any? { |source| suite_wide_source?(source) }
+    rescue StandardError, LoadError
       true
+    end
+
+    def suite_wide_source?(source)
+      result = Prism.parse(source)
+      return true unless result.success?
+
+      found = false
+      traverse = lambda do |node|
+        if node.is_a?(Prism::ClassNode) || node.is_a?(Prism::ModuleNode)
+          found = true
+        elsif node.is_a?(Prism::CallNode)
+          receiver = node.receiver
+          receiver_name = receiver.full_name if receiver.respond_to?(:full_name)
+          found ||= (node.name == :configure && receiver_name == 'RSpec')
+          found ||= SUITE_WIDE_DYNAMIC_CALLS.include?(node.name)
+          found ||= %i[include prepend extend].include?(node.name) &&
+            (receiver.is_a?(Prism::ConstantReadNode) || receiver.is_a?(Prism::ConstantPathNode))
+        end
+        node.compact_child_nodes.each { |child| traverse.call(child) } unless found
+      end
+      traverse.call(result.value)
+      found
     end
 
     def valid_observation?(entry)
