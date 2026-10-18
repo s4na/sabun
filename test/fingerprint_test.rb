@@ -59,6 +59,23 @@ class FingerprintTest < Minitest::Test
     end
   end
 
+  def test_checkout_local_bundle_paths_are_normalized
+    Dir.mktmpdir do |first_root|
+      Dir.mktmpdir do |second_root|
+        [first_root, second_root].each do |root|
+          File.write(File.join(root, 'Gemfile'), "source 'https://rubygems.org'\n")
+          File.write(File.join(root, 'Gemfile.lock'), "GEM\n  specs:\n")
+        end
+        with_environment('BUNDLE_GEMFILE' => File.join(first_root, 'Gemfile')) do
+          first = Sabun::Core.fingerprint(root: first_root)
+          ENV['BUNDLE_GEMFILE'] = File.join(second_root, 'Gemfile')
+          second = Sabun::Core.fingerprint(root: second_root)
+          assert_equal first, second
+        end
+      end
+    end
+  end
+
   def test_ignored_source_changes_invalidate_the_fingerprint
     Dir.mktmpdir do |root|
       system('git', '-C', root, 'init', '-q')

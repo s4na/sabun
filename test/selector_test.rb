@@ -79,6 +79,16 @@ class SelectorTest < Minitest::Test
     assert_equal ['spec/b_spec.rb'], plan['suites']['spec']['selected']
   end
 
+  def test_changed_test_support_file_selects_recorded_consumers
+    @units['spec/b_spec.rb']['dependencies'] = ['spec/a_spec.rb']
+    save_baseline
+    write('spec/a_spec.rb', '# changed support code')
+    git('add', 'spec/a_spec.rb')
+    git('commit', '-qm', 'change shared test support')
+
+    assert_equal %w[spec/a_spec.rb spec/b_spec.rb], plan['suites']['spec']['selected'].sort
+  end
+
   def test_mismatched_fingerprint_runs_all
     save_baseline('fingerprint' => 'wrong')
     assert_equal 2, plan['suites']['spec']['selected'].size

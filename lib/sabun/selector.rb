@@ -112,9 +112,12 @@ module Sabun
           why << 'unobserved_or_incomplete' unless valid_entry
           why << 'test_changed' if changes.any? { |change| change['path'] == unit.split('::', 2).first }
           changes.each do |change|
-            # Changed test files select their own units above; they must not
-            # fan out as application-level structural changes across suites.
-            next if test_paths.include?(change['path'])
+            if test_paths.include?(change['path'])
+              # A configured test may also be required as executable support
+              # code by another unit; preserve that recorded dependency.
+              why << "test_dependency:#{change['path']}" if valid_entry && entry['dependencies'].include?(change['path'])
+              next
+            end
             if change['scope'] == 'ruby_body'
               why << "ruby_dependency:#{change['path']}" if valid_entry && entry['dependencies'].include?(change['path'])
             else

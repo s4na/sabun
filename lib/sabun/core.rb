@@ -36,13 +36,21 @@ module Sabun
       keys = (%w[RUBYOPT RAILS_ENV RACK_ENV BUNDLE_GEMFILE SABUN_ENV_KEY] +
               (config || {}).fetch('environment_variables', [])).uniq.sort
       env = keys.to_h { |key| [key, ENV[key]] }
+      if env['BUNDLE_GEMFILE']
+        bundle_gemfile = File.expand_path(env['BUNDLE_GEMFILE'], root)
+        env['BUNDLE_GEMFILE'] = relative(bundle_gemfile, root) || bundle_gemfile
+      end
       # 計測用loaderだけは実行条件の差にしない。その他のRubyオプションは保持する。
       env['RUBYOPT'] = env['RUBYOPT'].to_s.split.reject do |option|
         %w[-rsabun/boot -rsabun/e2e/boot].include?(option)
       end.join(' ')
       files = %w[Gemfile.lock .ruby-version package-lock.json yarn.lock pnpm-lock.yaml]
       files << "#{File.expand_path(ENV['BUNDLE_GEMFILE'], root)}.lock" if ENV['BUNDLE_GEMFILE']
-      digests = files.to_h { |path| [path, File.file?(File.expand_path(path, root)) ? Digest::SHA256.file(File.expand_path(path, root)).hexdigest : nil] }
+      digests = files.to_h do |path|
+        absolute = File.expand_path(path, root)
+        key = relative(absolute, root) || absolute
+        [key, File.file?(absolute) ? Digest::SHA256.file(absolute).hexdigest : nil]
+      end
       ignored_sources = ignored_source_digests(root: root)
       Digest::SHA256.hexdigest(JSON.generate([RUBY_ENGINE, RUBY_VERSION, env, digests, ignored_sources, config]))
     end
